@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Web AR — iOS + Android</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f); color: #fff; }
+    .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 16px; padding: 20px; text-align: center; }
+    h1 { font-size: 22px; font-weight: 600; }
+    .sub { font-size: 14px; opacity: .75; max-width: 340px; line-height: 1.5; }
+    model-viewer {
+      width: min(92vw, 460px); height: min(60vh, 460px);
+      background: rgba(255,255,255,.04); border-radius: 18px;
+      --poster-color: transparent;
+    }
+    #arBtn {
+      position: relative; margin-top: 4px; padding: 14px 30px; font-size: 16px;
+      font-weight: 600; border: none; border-radius: 999px; cursor: pointer; color: #fff;
+      background: linear-gradient(135deg, #6d5efc, #46b1ff);
+      box-shadow: 0 8px 24px rgba(70,177,255,.4);
+    }
+    .note { font-size: 12px; opacity: .5; max-width: 340px; }
+    .badge { display:inline-block; font-size:11px; padding:3px 10px; border-radius:999px;
+      background:rgba(255,255,255,.1); margin:2px; }
+    #unsupported { display:none; color:#ffd93d; font-size:13px; max-width:320px; }
+  </style>
+  <!-- model-viewer (เก็บไว้ในเครื่อง รันได้แม้ CDN ล่ม) -->
+  <script type="module" src="/static/model-viewer.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🪐 Web AR (iOS + Android)</h1>
+    <p class="sub">หมุนดูโมเดลได้เลย แล้วกดปุ่มด้านล่างเพื่อวางในโลกจริงบนพื้น</p>
+
+    <model-viewer
+      id="mv"
+      src="/static/models/Astronaut.glb"
+      ios-src="/static/models/Astronaut.usdz"
+      alt="Astronaut 3D model"
+      ar
+      ar-modes="webxr scene-viewer quick-look"
+      ar-scale="auto"
+      ar-placement="floor"
+      camera-controls
+      touch-action="pan-y"
+      shadow-intensity="1"
+      auto-rotate>
+      <button id="arBtn" slot="ar-button">👋 วางในโลกจริง (AR)</button>
+    </model-viewer>
+
+    <p id="unsupported">⚠️ อุปกรณ์นี้ไม่รองรับ AR — ดูโมเดล 3D แบบหมุนได้อย่างเดียว</p>
+
+    <div>
+      <span class="badge">iOS → AR Quick Look</span>
+      <span class="badge">Android → Scene Viewer</span>
+      <span class="badge">plane detection จริง</span>
+    </div>
+    <p class="note">iOS 12+ Safari / Android 8+ Chrome • วางบนพื้นแล้วเดินรอบ ปรับขนาดได้</p>
+  </div>
+
+  <script type="module">
+    const mv = document.getElementById('mv');
+    mv.addEventListener('load', () => {
+      // ถ้าอุปกรณ์ไม่รองรับ AR ให้ซ่อนปุ่มแล้วแจ้งเตือน
+      if (!mv.canActivateAR) {
+        const btn = document.getElementById('arBtn');
+        if (btn) btn.style.display = 'none';
+        document.getElementById('unsupported').style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
