@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ตามรอยพระเจ้าตาก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=mobile_2">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="perm">
+  <div class="perm-corner tl"></div>
+  <div class="perm-corner tr"></div>
+  <div class="perm-corner bl"></div>
+  <div class="perm-corner br"></div>
+
+  <!-- <div class="pi">
+    <div class="pi-halo"></div>
+    <svg class="pi-sword" viewBox="0 0 64 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="bladeG" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#7A5E1E"/>
+          <stop offset=".5" stop-color="#F0D080"/>
+          <stop offset="1" stop-color="#7A5E1E"/>
+        </linearGradient>
+        <linearGradient id="hiltG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#F0D080"/>
+          <stop offset="1" stop-color="#7A5E1E"/>
+        </linearGradient>
+      </defs>
+      <polygon points="32,4 38,110 26,110" fill="url(#bladeG)" stroke="#F0D080" stroke-width=".6"/>
+      <line x1="32" y1="14" x2="32" y2="106" stroke="#fff" stroke-opacity=".35" stroke-width=".8"/>
+      <rect x="8" y="110" width="48" height="6" rx="2" fill="url(#hiltG)"/>
+      <rect x="29" y="116" width="6" height="28" rx="1.5" fill="url(#hiltG)"/>
+      <circle cx="32" cy="148" r="6" fill="url(#hiltG)" stroke="#F0D080" stroke-width=".6"/>
+    </svg>
+  </div> -->
+  <div class="perm-ambient" id="perm-ambient"></div>
+  <div class="perm-content">
+    <div class="pi-stack">
+      <div class="pi-aura"></div>
+      <img class="pi-fx" src="assets/effect-light-1-600.png" alt="">
+      <div class="pi-particles" id="pi-particles"></div>
+      <img class="pi-sword-img" src="assets/sword-200.png" alt="">
+      <div class="pi-sword-shine"></div>
+    </div>
+    <div class="pt">ตามรอยพระเจ้าตาก</div>
+    <div class="pe">FOLLOWING KING TAKSIN</div>
+    <div class="pt-line"></div>
+    <div class="pd">หันกล้องไปยังสถานที่ประวัติศาสตร์<br>ปลดปล่อยแสงแห่งพระธาตุ</div>
+    <div id="perr"></div>
+    <button class="pb" onclick="startApp()">
+      <img src="assets/open-camera-600.png" alt="เปิดกล้อง">
+    </button>
+  </div>
+</div>
+
+<!-- Model Selection Screen -->
+<div id="model-select" style="display:none">
+  <div class="model-select-bg"></div>
+  <div class="model-select-content">
+    <div class="model-select-title">เลือกสถานที่ประวัติศาสตร์</div>
+    <div class="model-select-grid" id="model-grid"></div>
+    <button class="model-select-back" onclick="backToIntro()">← ย้อนกลับ</button>
+  </div>
+</div>
+
+<!-- Calibration Intro Screen -->
+<div id="cal-intro" style="display:none">
+  <div class="cal-intro-bg"></div>
+  <div class="cal-intro-content">
+    <div class="cal-intro-title">⊕ ปรับเข็มทิศ</div>
+    <div class="cal-intro-subtitle" id="cal-intro-spot">หั่นกล้องไปยังสถานที่ประวัติศาสตร์</div>
+    <div class="cal-intro-desc">ที่อยากแบบฉัลอง</div>
+    
+    <canvas id="cal-intro-compass" width="280" height="280" style="margin:20px auto;display:block"></canvas>
+    
+    <div class="cal-intro-progress">
+      <div id="cal-intro-acc-label">ความเสถียร</div>
+      <div class="cal-intro-acc-bar"><div id="cal-intro-acc-fill" style="width:0%"></div></div>
+    </div>
+    
+    <div class="cal-intro-fig8">
+      <div class="material-symbols-outlined" id="cal-intro-phone" style="font-size:80px;text-align:center;opacity:.6">mobile_2</div>
+      <div id="cal-intro-hint" style="text-align:center;margin-top:12px;font-size:13px;line-height:1.4">หมุนโทรศัพท์เป็นรูปเลข 8<br>เพื่อ calibrate เซนเซอร์แม่เหล็ก</div>
+    </div>
+    
+    <button class="cal-intro-btn" onclick="startARAfterCal()">ปิด หนุด ✓</button>
+  </div>
+</div>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="vfx"></canvas>
+
+<div id="hud">
+  <div id="top">
+    <div><div class="tt">ตามรอยพระเจ้าตาก</div><div class="ts">FOLLOWING KING TAKSIN</div></div>
+    <div style="text-align:right">
+      <div><span id="gps-dot"></span><span id="gps-txt">GPS...</span></div>
+      <div id="coord-txt">---, ---</div>
+    </div>
+  </div>
+
+  <div id="cmp-wrap">
+    <canvas id="cmp-cv" width="300" height="56"></canvas>
+    <div id="cmp-line"></div>
+  </div>
+
+  <div id="vfx-tag">◌ SEARCHING...</div>
+
+  <div id="aim">
+    <div class="aim-tick t"></div>
+    <div class="aim-tick r"></div>
+    <div class="aim-tick b"></div>
+    <div class="aim-tick l"></div>
+    <div id="aim-dot"></div>
+  </div>
+
+  <div id="popup">
+    <div id="pop-icon">🏛️</div>
+    <div id="pop-name">พระปรางค์สามยอด</div>
+    <div id="pop-dist">---</div>
+  </div>
+
+  <div id="bottom">
+    <div id="b-name">กำลังหาตำแหน่ง...</div>
+    <div id="b-desc">หันกล้องไปหา spot เพื่อดู VFX</div>
+    <div id="b-chips"></div>
+  </div>
+
+  <div id="toast">
+    <div class="t-stamp">
+      <div class="t-ring-outer"></div>
+      <div class="t-ring-inner"></div>
+      <div id="t-icon">⚔️</div>
+    </div>
+    <div id="t-title">UNLOCKED</div>
+    <div class="t-rule"></div>
+    <div id="t-sub"></div>
+  </div>
+
+  <button id="cal-btn" onclick="openCal()">⊕ ปรับทิศ</button>
+</div>
+
+<div id="cal-panel">
+  <div class="cal-title">⊕ ปรับเข็มทิศ</div>
+
+  <div class="cal-acc-wrap">
+    <div class="cal-acc-label">ความเสถียร</div>
+    <div class="cal-acc-bar"><div id="cal-acc-fill"></div></div>
+  </div>
+
+  <div class="cal-fig8-wrap">
+    <div class="cal-phone material-symbols-outlined" id="cal-phone">mobile_2</div>
+  </div>
+  <div class="cal-hint" id="cal-fig8-hint">หมุนโทรศัพท์เป็นรูปเลข 8<br>เพื่อ calibrate เซ็นเซอร์แม่เหล็ก</div>
+
+  <div class="cal-hdg-row">
+    <span class="cal-hdg-label">ทิศปัจจุบัน</span>
+    <span id="cal-heading">0°</span>
+  </div>
+
+  <div class="cal-offset-row">
+    <button class="cal-adj" onclick="adjustOffset(-5)">−5°</button>
+    <div id="cal-offset-val">0°</div>
+    <button class="cal-adj" onclick="adjustOffset(+5)">+5°</button>
+  </div>
+  <div class="cal-hint" style="font-size:10px;opacity:.45">ปรับ offset ถ้าทิศยังเพี้ยนหลัง calibrate</div>
+
+  <div style="display:flex;gap:12px;margin-top:4px">
+    <button class="cal-reset" onclick="resetOffset()">รีเซ็ต</button>
+    <button class="cal-done" onclick="closeCal()">เสร็จแล้ว ✓</button>
+  </div>
+</div>
+
+<script>
+// radial particles emitting from effect-light center
+(function(){
+  var box = document.getElementById('pi-particles');
+  if(!box) return;
+  var N = 200;
+  var FADE_AT = 300;          // px – tail must be fully gone by this radius
+  var FADE_SPAN = 250;        // px – distance over which the tail fades to 0
+  var kfNeeded = {};          // unique keyframes actually used
+  for(var i=0;i<N;i++){
+    var p = document.createElement('span');
+    p.className = 'p';
+    var size = 3 + Math.random()*4;            // 3–7px
+    p.style.width = p.style.height = size + 'px';
+    p.style.marginLeft = (-size/2) + 'px';
+    p.style.marginTop = (-size/2) + 'px';
+    var dist = 200 + Math.random()*800;          // 200–1000px
+    var speed = 24 + Math.random()*10;           // px/s (≈ same as before)
+    var dur = dist / speed;                       // longer travel = longer life
+    var delay = -Math.random()*dur;
+    p.style.setProperty('--a', (Math.random()*360) + 'deg');
+    p.style.setProperty('--dist', dist + 'px');
+    p.style.setProperty('--tail', (30 + Math.random()*40) + 'px');
+    p.style.setProperty('--dur', dur + 's');
+    p.style.setProperty('--delay', delay + 's');
+
+    var tail = document.createElement('i');
+    tail.className = 'tail';
+    if(dist > FADE_AT){
+      // fade window: from (FADE_AT - FADE_SPAN) up to FADE_AT, as % of travel
+      var fs = Math.max(0, Math.round((FADE_AT - FADE_SPAN)/dist*100));
+      var fe = Math.round(FADE_AT/dist*100);
+      if(fe <= fs) fs = fe - 1;
+      var key = fs + '_' + fe;
+      kfNeeded[key] = true;
+      // tail uses the SAME dur/delay as the particle -> stays in sync
+      tail.style.animation = 'pi-tailfade'+key+' '+dur+'s linear '+delay+'s infinite';
+    }
+    p.appendChild(tail);
+    box.appendChild(p);
+  }
+  // inject the keyframes that were actually used
+  var css = '';
+  for(var k in kfNeeded){
+    var parts = k.split('_');     // [fadeStart%, fadeEnd%]
+    css += '@keyframes pi-tailfade'+k+'{0%,'+parts[0]+'%{opacity:1}'+parts[1]+'%{opacity:0}100%{opacity:0}}';
+  }
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+// ambient floating dust drifting up the whole screen (atmosphere)
+(function(){
+  var box = document.getElementById('perm-ambient');
+  if(!box) return;
+  var N = 100;
+  for(var i=0;i<N;i++){
+    var a = document.createElement('span');
+    a.className = 'amb';
+    var size = 3 + Math.random()*4;            // 2–6px
+    a.style.width = a.style.height = size + 'px';
+    a.style.left = (Math.random()*200) + '%';
+    a.style.top = (Math.random()*100) + '%';   // scattered across the whole screen
+    var dur = 6 + Math.random()*8;             // 6–14s gentle bob
+    a.style.setProperty('--dur', dur + 's');
+    a.style.setProperty('--delay', (-Math.random()*dur) + 's');
+    // small meandering drift, not a full-screen rise
+    a.style.setProperty('--dx', ((Math.random()*2-1)*100) + 'px');
+    a.style.setProperty('--dy', ((Math.random()*2-1)*100) + 'px');
+    a.style.setProperty('--op0', (0.15 + Math.random()*0.25).toFixed(2));
+    a.style.setProperty('--op1', (0.45 + Math.random()*0.4).toFixed(2));
+    box.appendChild(a);
+  }
+})();
+</script>
+<script src="js/app.js"></script>
+</body>
+</html>

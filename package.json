@@ -9,6 +9,7 @@
     "https": "node server.js --https"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "selfsigned": "^2.4.1"
   }

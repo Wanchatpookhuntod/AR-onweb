@@ -34,6 +34,7 @@ const PORT = portIdx !== -1 && argv[portIdx + 1] ? parseInt(argv[portIdx + 1], 1
 const ROOT = __dirname;
 const TEMPLATES = path.join(ROOT, 'templates');
 const STATIC = path.join(ROOT, 'static');
+const TAKSIN = path.join(ROOT, 'taksin');
 
 // ---------- MIME types ----------
 const MIME = {
@@ -80,8 +81,8 @@ function handler(req, res) {
   const url = decodeURIComponent(req.url.split('?')[0]);
 
   // หน้าเมนูหลัก: 2 ตัวเลือก
-  if (url === '/' || url === '/index.html') {
-    return sendFile(res, path.join(TEMPLATES, 'index.html'));
+  if (url === '/' || url === '/index.html' || url === '/menu.html') {
+    return sendFile(res, path.join(TEMPLATES, 'menu.html'));
   }
 
   // หน้า AR: model-viewer (iOS Quick Look + Android Scene Viewer)
@@ -89,9 +90,44 @@ function handler(req, res) {
     return sendFile(res, path.join(TEMPLATES, 'mv.html'));
   }
 
-  // หน้าว่าง (เผื่อใส่เนื้อหาภายหลัง)
+  // รายการโมเดล: สแกน static/models/ หาไฟล์ .glb แล้วจับคู่ .usdz ชื่อเดียวกัน
+  // เพิ่มโมเดลใหม่แค่วางไฟล์ลงโฟลเดอร์ ไม่ต้องแก้โค้ด
+  if (url === '/api/models') {
+    const dir = path.join(STATIC, 'models');
+    fs.readdir(dir, (err, files) => {
+      if (err) files = [];
+      const models = files
+        .filter(f => f.toLowerCase().endsWith('.glb'))
+        .sort()
+        .map(f => {
+          const name = f.slice(0, -4);
+          const usdz = files.find(u => u.toLowerCase() === (name + '.usdz').toLowerCase());
+          return {
+            name,
+            glb: `/static/models/${f}`,
+            usdz: usdz ? `/static/models/${usdz}` : null, // null = iPhone เข้า AR ไม่ได้
+          };
+        });
+      res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(models));
+    });
+    return;
+  }
+
+  // หน้า taksin: World AR "ตามรอยพระเจ้าตาก" (GPS + เข็มทิศ)
+  // redirect ให้ลงท้ายด้วย / เพื่อให้ relative path (css/, js/, assets/) ใน index.html ทำงาน
   if (url === '/page2' || url === '/page2.html') {
-    return sendFile(res, path.join(TEMPLATES, 'page2.html'));
+    res.writeHead(302, { Location: '/page2/' });
+    res.end();
+    return;
+  }
+  if (url.startsWith('/page2/')) {
+    const rel = url.slice('/page2/'.length) || 'index.html';
+    const filePath = safeJoin(TAKSIN, rel);
+    if (!filePath) {
+      res.writeHead(403); res.end('Forbidden'); return;
+    }
+    return sendFile(res, filePath);
   }
 
   // ไฟล์ static: /static/...
@@ -133,36 +169,46 @@ function printQr(url) {
 
 // ---------- start ----------
 const ip = getLocalIp();
-const scheme = useHttps ? 'https' : 'http';
-const phoneUrl = `${scheme}://${ip}:${PORT}`;
+const HTTPS_PORT = PORT + 1; // HTTP=5001, HTTPS=5002 (or --port offset)
 
-let server;
-if (useHttps) {
-  let pems;
-  try {
-    const selfsigned = require('selfsigned');
-    pems = selfsigned.generate(
-      [{ name: 'commonName', value: ip }],
-      { days: 365, keySize: 2048 }
-    );
-  } catch (e) {
-    console.error('ต้องติดตั้ง dependency ก่อน:  npm install');
-    process.exit(1);
+// HTTP server: localhost → serve normally, IP → redirect to HTTPS
+const httpServer = http.createServer((req, res) => {
+  const host = req.headers.host || '';
+  const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  if (!isLocalhost) {
+    // Redirect non-localhost HTTP → HTTPS (port HTTPS_PORT)
+    const httpsUrl = `https://${ip}:${HTTPS_PORT}${req.url}`;
+    res.writeHead(301, { Location: httpsUrl });
+    res.end();
+    return;
   }
-  server = https.createServer({ key: pems.private, cert: pems.cert }, handler);
-} else {
-  server = http.createServer(handler);
-}
-
-server.listen(PORT, '0.0.0.0', () => {
+  handler(req, res);
+});
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(56));
-  console.log(`  เปิดบนเครื่องนี้ : ${scheme}://localhost:${PORT}`);
-  console.log(`  เปิดบนมือถือ    : ${phoneUrl}`);
-  if (!useHttps) {
-    console.log('  * มือถือต้องใช้ HTTPS -> รันใหม่ด้วย:  node server.js --https');
-  }
-  console.log('='.repeat(56));
-  console.log('  ** มือถือต้องอยู่ WiFi เดียวกับเครื่องนี้ **');
-  printQr(phoneUrl);
+  console.log(`  HTTP  (localhost) : http://localhost:${PORT}`);
+  console.log(`  เปิดบนเครื่องนี้ : http://localhost:${PORT}`);
   console.log('='.repeat(56));
 });
+
+// Always start HTTPS server (works on mobile/IP)
+let pems;
+try {
+  const selfsigned = require('selfsigned');
+  pems = selfsigned.generate(
+    [{ name: 'commonName', value: ip }],
+    { days: 365, keySize: 2048 }
+  );
+  const httpsServer = https.createServer({ key: pems.private, cert: pems.cert }, handler);
+  httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+    console.log(`  HTTPS (มือถือ)   : https://${ip}:${HTTPS_PORT}`);
+    console.log('='.repeat(56));
+    console.log('  ** มือถือต้องอยู่ WiFi เดียวกัน **');
+    console.log('  ** กด Advanced → Proceed เมื่อเตือน cert **');
+    printQr(`https://${ip}:${HTTPS_PORT}`);
+    console.log('='.repeat(56));
+  });
+} catch (e) {
+  console.log('  (รัน npm install เพื่อเปิด HTTPS สำหรับมือถือ)');
+  console.log('='.repeat(56));
+}

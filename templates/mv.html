@@ -60,9 +60,30 @@
       background: linear-gradient(135deg, #6d5efc, #46b1ff);
       box-shadow: 0 8px 24px rgba(70,177,255,.45);
     }
-    #launchBtn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+    #launchBtn:disabled, #placeBtn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
     .note { font-size: 12px; opacity: .55; max-width: 340px; }
     #unsupported { display:none; color:#ffd93d; font-size:13px; max-width:320px; }
+
+    /* แถบเลือกโมเดล */
+    .mdl-bar {
+      display: flex; gap: 10px; flex-wrap: nowrap; overflow-x: auto;
+      max-width: 100%; padding: 4px 6px; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .mdl-bar::-webkit-scrollbar { display: none; }
+    .mdl-chip {
+      flex: none; display: flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 999px; cursor: pointer;
+      font-size: 14px; color: #fff; white-space: nowrap;
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+      backdrop-filter: blur(6px); transition: all .2s;
+    }
+    .mdl-chip.active {
+      background: linear-gradient(135deg, rgba(109,94,252,.55), rgba(70,177,255,.55));
+      border-color: rgba(70,177,255,.9);
+      box-shadow: 0 4px 16px rgba(70,177,255,.4);
+    }
+    .mdl-chip .no-ios { font-size: 10px; opacity: .65 }
   </style>
   <!-- model-viewer (เก็บไว้ในเครื่อง รันได้แม้ CDN ล่ม) -->
   <script type="module" src="/static/model-viewer.min.js"></script>
@@ -75,9 +96,7 @@
   <div id="preview">
     <model-viewer
       id="mv"
-      src="/static/models/Astronaut.glb"
-      ios-src="/static/models/Astronaut.usdz"
-      alt="Astronaut 3D model"
+      alt="3D model"
       ar
       ar-modes="webxr scene-viewer quick-look"
       ar-scale="auto"
@@ -91,6 +110,7 @@
   </div>
 
   <div id="pvHud" style="display:none">
+    <div class="mdl-bar" id="mdlBarPv"></div>
     <p id="pvHint">หมุน/ซูมดูโมเดลในห้องของคุณ แล้วกดวางจริง</p>
     <button id="placeBtn">🚀 วางจริงใน AR</button>
   </div>
@@ -98,7 +118,8 @@
   <!-- STAGE 1: เปิดกล้อง -->
   <div id="launch">
     <h1>🪐 Web AR (iOS + Android)</h1>
-    <p class="sub">เปิดกล้องเพื่อพรีวิวโมเดลในห้องของคุณก่อน แล้วค่อยกดวางจริงในโลกจริง</p>
+    <p class="sub">เลือกโมเดล แล้วเปิดกล้องเพื่อพรีวิวในห้องของคุณก่อนวางจริงในโลกจริง</p>
+    <div class="mdl-bar" id="mdlBarLaunch"></div>
     <button id="launchBtn" disabled>📷 เปิดกล้อง</button>
     <p id="launchInfo" class="note">กำลังโหลดโมเดล…</p>
     <p id="unsupported">⚠️ อุปกรณ์นี้ไม่รองรับ AR — พรีวิว/หมุนดูโมเดลได้อย่างเดียว</p>
@@ -116,6 +137,48 @@
 
     let enteredAR = false;
     let stream = null;
+
+    // ---------- รายการโมเดล ----------
+    let models = [], currentModel = null;
+
+    function renderChips() {
+      for (const bar of [document.getElementById('mdlBarLaunch'), document.getElementById('mdlBarPv')]) {
+        bar.innerHTML = '';
+        for (const m of models) {
+          const chip = document.createElement('button');
+          chip.className = 'mdl-chip' + (m === currentModel ? ' active' : '');
+          chip.innerHTML = `🗿 ${m.name}` + (m.usdz ? '' : ' <span class="no-ios">Android เท่านั้น</span>');
+          chip.onclick = () => selectModel(m);
+          bar.appendChild(chip);
+        }
+      }
+    }
+
+    function selectModel(m) {
+      if (m === currentModel) return;
+      currentModel = m;
+      renderChips();
+      // ปิดปุ่มไว้ก่อน จนกว่าโมเดลใหม่จะโหลดเสร็จ (event 'load' จะเปิดให้)
+      launchBtn.disabled = true;
+      placeBtn.disabled = true;
+      launchInfo.textContent = 'กำลังโหลดโมเดล…';
+      if (m.usdz) mv.setAttribute('ios-src', m.usdz);
+      else mv.removeAttribute('ios-src');
+      mv.alt = m.name;
+      mv.src = m.glb;
+    }
+
+    async function loadModelList() {
+      try {
+        models = await (await fetch('/api/models')).json();
+      } catch (e) { models = []; }
+      if (!models.length) {
+        launchInfo.textContent = 'ไม่พบโมเดลใน static/models/';
+        return;
+      }
+      selectModel(models[0]);
+    }
+    loadModelList();
 
     // ---------- กล้องสด (ด่านพรีวิว) ----------
     async function startCamera() {
@@ -144,6 +207,7 @@
 
     // ---------- โหลดโมเดลเสร็จ ----------
     mv.addEventListener('load', () => {
+      placeBtn.disabled = false;
       if (mv.canActivateAR) {
         launchBtn.disabled = false;
         launchInfo.textContent = 'พร้อมแล้ว — แตะเพื่อเปิดกล้อง';

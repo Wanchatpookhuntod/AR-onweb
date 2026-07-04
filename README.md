@@ -49,7 +49,11 @@ ngrok http 5000
 ├── server.js               # Node.js server (เสิร์ฟหน้าเว็บ + HTTPS + QR)
 ├── package.json
 ├── templates/
-│   └── mv.html             # หน้า AR (model-viewer)
+│   ├── menu.html           # เมนูหลัก (/)
+│   └── mv.html             # หน้า AR (/ar — model-viewer)
+├── taksin/                 # หน้า /page2 — "ตามรอยพระเจ้าตาก" World AR (GPS + เข็มทิศ)
+│   ├── index.html
+│   ├── css/  js/  assets/
 └── static/
     ├── model-viewer.min.js
     └── models/             # Astronaut.glb (Android) + Astronaut.usdz (iOS)
