@@ -1,0 +1,15 @@
+{
+  "name": "web-ar-onweb",
+  "version": "1.0.0",
+  "description": "Web AR ด้วย <model-viewer> — Node.js static server (HTTPS สำหรับมือถือ)",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "https": "node server.js --https"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0",
+    "selfsigned": "^2.4.1"
+  }
+}

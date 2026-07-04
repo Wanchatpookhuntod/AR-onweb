@@ -3,246 +3,67 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Web AR — Plane Detection</title>
+  <title>Web AR — เมนูหลัก</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-    #overlay {
-      position: fixed; inset: 0; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 18px;
-      background: radial-gradient(circle at 50% 30%, #1b2735, #090a0f);
-      color: #fff; text-align: center; padding: 24px;
+    html, body { height: 100%; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f); color: #fff; }
+    .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 26px; padding: 24px; text-align: center; }
+    h1 { font-size: 24px; font-weight: 700; }
+    .sub { font-size: 14px; opacity: .7; max-width: 340px; line-height: 1.5; }
+    .menu { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 360px; }
+    .card {
+      display: flex; align-items: center; gap: 16px; text-decoration: none; color: #fff;
+      padding: 20px 22px; border-radius: 18px; border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.04); transition: transform .15s ease, background .15s ease;
     }
-    #overlay h1 { font-size: 22px; font-weight: 600; }
-    #overlay p { font-size: 14px; opacity: .75; max-width: 320px; line-height: 1.5; }
-    #startBtn {
-      margin-top: 10px; padding: 14px 32px; font-size: 16px; font-weight: 600;
-      border: none; border-radius: 999px; cursor: pointer; color: #fff;
-      background: linear-gradient(135deg, #6d5efc, #46b1ff);
-      box-shadow: 0 8px 24px rgba(70,177,255,.4);
+    .card:active { transform: scale(.98); }
+    .card .icon {
+      width: 52px; height: 52px; flex: none; border-radius: 14px;
+      display: grid; place-items: center; font-size: 26px;
     }
-    #startBtn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-    /* HUD ตอนอยู่ใน AR */
-    #hud {
-      position: fixed; top: 0; left: 0; right: 0; padding: 14px;
-      display: none; justify-content: center; pointer-events: none; z-index: 5;
-    }
-    #hint {
-      background: rgba(0,0,0,.55); color: #fff; font-size: 13px;
-      padding: 8px 16px; border-radius: 999px; backdrop-filter: blur(6px);
-    }
+    .card .txt { text-align: left; }
+    .card .txt .t { font-size: 17px; font-weight: 600; }
+    .card .txt .d { font-size: 12px; opacity: .6; margin-top: 2px; }
+    .card .arrow { margin-left: auto; opacity: .4; font-size: 20px; }
+
+    .card.ar { background: linear-gradient(135deg, rgba(109,94,252,.22), rgba(70,177,255,.22));
+      border-color: rgba(70,177,255,.35); }
+    .card.ar .icon { background: linear-gradient(135deg, #6d5efc, #46b1ff); }
+    .card.blank .icon { background: rgba(255,255,255,.1); }
+
+    .foot { font-size: 12px; opacity: .45; }
   </style>
 </head>
 <body>
-  <div id="overlay">
-    <h1>🧭 Web AR — Plane Detection</h1>
-    <p id="info">กำลังตรวจสอบการรองรับ WebXR…</p>
-    <button id="startBtn" disabled>เริ่ม AR</button>
-    <p style="font-size:12px;opacity:.5">ใช้ได้บน Android Chrome + ARCore เท่านั้น • ต้องเปิดผ่าน HTTPS</p>
+  <div class="wrap">
+    <div>
+      <h1>🪐 Web AR</h1>
+      <p class="sub">เลือกเมนูที่ต้องการ</p>
+    </div>
+
+    <nav class="menu">
+      <a class="card ar" href="/ar">
+        <div class="icon">👋</div>
+        <div class="txt">
+          <div class="t">เริ่ม AR</div>
+          <div class="d">พรีวิว + วางโมเดลในโลกจริง (iOS + Android)</div>
+        </div>
+        <div class="arrow">›</div>
+      </a>
+
+      <a class="card blank" href="/page2">
+        <div class="icon">✨</div>
+        <div class="txt">
+          <div class="t">ตัวเลือก 2</div>
+          <div class="d">หน้าว่าง — เผื่อไว้ใส่เนื้อหาภายหลัง</div>
+        </div>
+        <div class="arrow">›</div>
+      </a>
+    </nav>
+
+    <p class="foot">iOS 12+ Safari / Android 8+ Chrome</p>
   </div>
-
-  <div id="hud"><div id="hint">เลื่อนกล้องส่องพื้น แล้วแตะเพื่อวางวัตถุ</div></div>
-
-  <!-- three.js ผ่าน ES module + importmap -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
-
-  <script type="module">
-    import * as THREE from 'three';
-
-    const overlay  = document.getElementById('overlay');
-    const info     = document.getElementById('info');
-    const startBtn = document.getElementById('startBtn');
-    const hud      = document.getElementById('hud');
-    const hint     = document.getElementById('hint');
-
-    let renderer, scene, camera;
-    let reticle, hitTestSource = null, localSpace = null;
-    let controller;
-    const placedObjects = [];
-    const planeMeshes = new Map();   // XRPlane -> THREE.Mesh
-
-    // ---------- ตรวจสอบการรองรับ ----------
-    if (!('xr' in navigator)) {
-      info.textContent = 'เบราว์เซอร์นี้ไม่รองรับ WebXR (ต้องใช้ Android Chrome)';
-    } else {
-      navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-        if (supported) {
-          info.textContent = 'พร้อมแล้ว! กดเริ่ม AR แล้วส่องกล้องไปที่พื้น/โต๊ะ';
-          startBtn.disabled = false;
-        } else {
-          info.textContent = 'อุปกรณ์นี้ไม่รองรับ immersive-ar (ต้องมี ARCore)';
-        }
-      });
-    }
-
-    startBtn.addEventListener('click', startAR);
-
-    // ---------- เริ่มเซสชัน AR ----------
-    async function startAR() {
-      initScene();
-
-      const session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test', 'local-floor'],
-        optionalFeatures: ['plane-detection', 'dom-overlay'],
-        domOverlay: { root: document.body }
-      });
-
-      renderer.xr.setReferenceSpaceType('local');
-      await renderer.xr.setSession(session);
-
-      overlay.style.display = 'none';
-      hud.style.display = 'flex';
-
-      // hit-test source จาก viewer space
-      const viewerSpace = await session.requestReferenceSpace('viewer');
-      hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
-      localSpace = await session.requestReferenceSpace('local');
-
-      session.addEventListener('end', onSessionEnd);
-      renderer.setAnimationLoop(render);
-    }
-
-    function onSessionEnd() {
-      hitTestSource = null;
-      renderer.setAnimationLoop(null);
-      overlay.style.display = 'flex';
-      hud.style.display = 'none';
-      info.textContent = 'ออกจาก AR แล้ว — กดเริ่มใหม่ได้';
-    }
-
-    // ---------- สร้าง scene ----------
-    function initScene() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 40);
-
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.2));
-      const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-      dir.position.set(0.5, 1, 0.25);
-      scene.add(dir);
-
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(devicePixelRatio);
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-
-      // reticle = วงแหวนที่เกาะตามพื้นผิวที่ตรวจเจอ
-      const ringGeo = new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x46b1ff });
-      reticle = new THREE.Mesh(ringGeo, ringMat);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
-
-      // แตะหน้าจอ = controller 'select'
-      controller = renderer.xr.getController(0);
-      controller.addEventListener('select', onSelect);
-      scene.add(controller);
-
-      addEventListener('resize', () => {
-        camera.aspect = innerWidth / innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(innerWidth, innerHeight);
-      });
-    }
-
-    // ---------- แตะเพื่อวางวัตถุบนระนาบ ----------
-    const palette = [0xff6b6b, 0xffd93d, 0x6bcB77, 0x4d96ff, 0xb983ff];
-    function onSelect() {
-      if (!reticle.visible) return;
-      const h = 0.16;
-      const geo = new THREE.ConeGeometry(0.08, h, 24);
-      const mat = new THREE.MeshStandardMaterial({
-        color: palette[placedObjects.length % palette.length],
-        roughness: 0.4, metalness: 0.1
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      // วางบนระนาบ: ยกขึ้นครึ่งความสูงให้ฐานแตะพื้น
-      reticle.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-      mesh.position.y += h / 2;
-      scene.add(mesh);
-      placedObjects.push(mesh);
-      hint.textContent = `วางแล้ว ${placedObjects.length} ชิ้น • แตะเพิ่มได้`;
-    }
-
-    // ---------- visualize planes ที่ตรวจเจอ (ฟีเจอร์ plane-detection) ----------
-    function updateDetectedPlanes(frame) {
-      const detected = frame.detectedPlanes;
-      if (!detected) return;   // อุปกรณ์ไม่รองรับ plane-detection
-
-      // ลบ plane ที่หายไป
-      for (const [plane, mesh] of planeMeshes) {
-        if (!detected.has(plane)) { scene.remove(mesh); planeMeshes.delete(plane); }
-      }
-
-      for (const plane of detected) {
-        const pose = frame.getPose(plane.planeSpace, localSpace);
-        if (!pose) continue;
-
-        let mesh = planeMeshes.get(plane);
-        if (!mesh) {
-          mesh = createPlaneMesh(plane);
-          planeMeshes.set(plane, mesh);
-          scene.add(mesh);
-        } else if (mesh.userData.lastChanged !== plane.lastChangedTime) {
-          // polygon เปลี่ยน -> สร้าง geometry ใหม่
-          mesh.geometry.dispose();
-          mesh.geometry = buildPolygonGeometry(plane.polygon);
-          mesh.userData.lastChanged = plane.lastChangedTime;
-        }
-        mesh.matrix.fromArray(pose.transform.matrix);
-      }
-    }
-
-    function createPlaneMesh(plane) {
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0x46b1ff, transparent: true, opacity: 0.18, side: THREE.DoubleSide
-      });
-      const mesh = new THREE.Mesh(buildPolygonGeometry(plane.polygon), mat);
-      mesh.matrixAutoUpdate = false;
-      mesh.userData.lastChanged = plane.lastChangedTime;
-      return mesh;
-    }
-
-    // polygon ของ XRPlane เป็นจุดบนระนาบ XZ (y≈0)
-    function buildPolygonGeometry(polygon) {
-      const geo = new THREE.BufferGeometry();
-      const verts = [];
-      for (let i = 1; i < polygon.length - 1; i++) {
-        verts.push(polygon[0].x, polygon[0].y, polygon[0].z);
-        verts.push(polygon[i].x, polygon[i].y, polygon[i].z);
-        verts.push(polygon[i + 1].x, polygon[i + 1].y, polygon[i + 1].z);
-      }
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-      geo.computeVertexNormals();
-      return geo;
-    }
-
-    // ---------- loop หลัก ----------
-    function render(timestamp, frame) {
-      if (frame) {
-        // 1) hit-test -> อัปเดต reticle
-        const results = frame.getHitTestResults(hitTestSource);
-        if (results.length) {
-          const pose = results[0].getPose(localSpace);
-          reticle.visible = true;
-          reticle.matrix.fromArray(pose.transform.matrix);
-        } else {
-          reticle.visible = false;
-        }
-
-        // 2) วาดระนาบที่ตรวจเจอ
-        updateDetectedPlanes(frame);
-      }
-      renderer.render(scene, camera);
-    }
-  </script>
 </body>
 </html>

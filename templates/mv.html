@@ -6,36 +6,73 @@
   <title>Web AR — iOS + Android</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    html, body { height: 100%; overflow: hidden; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
       background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f); color: #fff; }
-    .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 16px; padding: 20px; text-align: center; }
-    h1 { font-size: 22px; font-weight: 600; }
-    .sub { font-size: 14px; opacity: .75; max-width: 340px; line-height: 1.5; }
+
+    /* กล้องสด (พื้นหลังด่านพรีวิว) */
+    #cam {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: 0; background: #000; display: none;
+    }
+
+    /* ด่านพรีวิว: model-viewer โปร่งใสทับกล้อง */
+    #preview { position: fixed; inset: 0; z-index: 1; display: none; }
+    body.preview-on #preview { display: block; }
+    body.preview-on #cam   { display: block; }
+
     model-viewer {
-      width: min(92vw, 460px); height: min(60vh, 460px);
-      background: rgba(255,255,255,.04); border-radius: 18px;
-      --poster-color: transparent;
+      width: 100%; height: 100%;
+      background: transparent; --poster-color: transparent;
     }
-    #arBtn {
-      position: relative; margin-top: 4px; padding: 14px 30px; font-size: 16px;
-      font-weight: 600; border: none; border-radius: 999px; cursor: pointer; color: #fff;
+
+    /* แถบควบคุมล่างของด่านพรีวิว */
+    #pvHud {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      padding: 18px 20px calc(22px + env(safe-area-inset-bottom));
+      background: linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0));
+      text-align: center;
+    }
+    #pvHud p { font-size: 13px; opacity: .9;
+      background: rgba(0,0,0,.4); padding: 6px 14px; border-radius: 999px; backdrop-filter: blur(6px); }
+    #arBtn, #placeBtn {
+      padding: 15px 34px; font-size: 17px; font-weight: 700; border: none;
+      border-radius: 999px; cursor: pointer; color: #fff;
       background: linear-gradient(135deg, #6d5efc, #46b1ff);
-      box-shadow: 0 8px 24px rgba(70,177,255,.4);
+      box-shadow: 0 8px 24px rgba(70,177,255,.45);
     }
-    .note { font-size: 12px; opacity: .5; max-width: 340px; }
-    .badge { display:inline-block; font-size:11px; padding:3px 10px; border-radius:999px;
-      background:rgba(255,255,255,.1); margin:2px; }
+    /* ใช้ปุ่มของเราเอง ซ่อนปุ่ม ar-button ของ model-viewer */
+    #arBtn { display: none; }
+
+    /* STAGE 1: หน้าเริ่ม (เปิดกล้อง) */
+    #launch {
+      position: fixed; inset: 0; z-index: 10; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; padding: 24px; text-align: center;
+      background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f);
+    }
+    body.preview-on #launch { display: none; }
+    #launch h1 { font-size: 22px; font-weight: 600; }
+    .sub { font-size: 14px; opacity: .75; max-width: 340px; line-height: 1.5; }
+    #launchBtn {
+      padding: 16px 36px; font-size: 18px; font-weight: 700; border: none;
+      border-radius: 999px; cursor: pointer; color: #fff;
+      background: linear-gradient(135deg, #6d5efc, #46b1ff);
+      box-shadow: 0 8px 24px rgba(70,177,255,.45);
+    }
+    #launchBtn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+    .note { font-size: 12px; opacity: .55; max-width: 340px; }
     #unsupported { display:none; color:#ffd93d; font-size:13px; max-width:320px; }
   </style>
   <!-- model-viewer (เก็บไว้ในเครื่อง รันได้แม้ CDN ล่ม) -->
   <script type="module" src="/static/model-viewer.min.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <h1>🪐 Web AR (iOS + Android)</h1>
-    <p class="sub">หมุนดูโมเดลได้เลย แล้วกดปุ่มด้านล่างเพื่อวางในโลกจริงบนพื้น</p>
+  <!-- พื้นหลัง: กล้องสด -->
+  <video id="cam" autoplay playsinline muted></video>
 
+  <!-- ด่านพรีวิว: หมุนดูโมเดลในห้องก่อนวางจริง -->
+  <div id="preview">
     <model-viewer
       id="mv"
       src="/static/models/Astronaut.glb"
@@ -48,28 +85,100 @@
       camera-controls
       touch-action="pan-y"
       shadow-intensity="1"
-      auto-rotate>
-      <button id="arBtn" slot="ar-button">👋 วางในโลกจริง (AR)</button>
+      loading="eager">
+      <button id="arBtn" slot="ar-button"></button>
     </model-viewer>
+  </div>
 
-    <p id="unsupported">⚠️ อุปกรณ์นี้ไม่รองรับ AR — ดูโมเดล 3D แบบหมุนได้อย่างเดียว</p>
+  <div id="pvHud" style="display:none">
+    <p id="pvHint">หมุน/ซูมดูโมเดลในห้องของคุณ แล้วกดวางจริง</p>
+    <button id="placeBtn">🚀 วางจริงใน AR</button>
+  </div>
 
-    <div>
-      <span class="badge">iOS → AR Quick Look</span>
-      <span class="badge">Android → Scene Viewer</span>
-      <span class="badge">plane detection จริง</span>
-    </div>
-    <p class="note">iOS 12+ Safari / Android 8+ Chrome • วางบนพื้นแล้วเดินรอบ ปรับขนาดได้</p>
+  <!-- STAGE 1: เปิดกล้อง -->
+  <div id="launch">
+    <h1>🪐 Web AR (iOS + Android)</h1>
+    <p class="sub">เปิดกล้องเพื่อพรีวิวโมเดลในห้องของคุณก่อน แล้วค่อยกดวางจริงในโลกจริง</p>
+    <button id="launchBtn" disabled>📷 เปิดกล้อง</button>
+    <p id="launchInfo" class="note">กำลังโหลดโมเดล…</p>
+    <p id="unsupported">⚠️ อุปกรณ์นี้ไม่รองรับ AR — พรีวิว/หมุนดูโมเดลได้อย่างเดียว</p>
   </div>
 
   <script type="module">
-    const mv = document.getElementById('mv');
+    const mv         = document.getElementById('mv');
+    const cam        = document.getElementById('cam');
+    const launch     = document.getElementById('launch');
+    const launchBtn  = document.getElementById('launchBtn');
+    const launchInfo = document.getElementById('launchInfo');
+    const pvHud      = document.getElementById('pvHud');
+    const pvHint     = document.getElementById('pvHint');
+    const placeBtn   = document.getElementById('placeBtn');
+
+    let enteredAR = false;
+    let stream = null;
+
+    // ---------- กล้องสด (ด่านพรีวิว) ----------
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }, audio: false
+        });
+        cam.srcObject = stream;
+        await cam.play();
+      } catch (e) {
+        // เปิดกล้องไม่ได้ (ปฏิเสธสิทธิ์ ฯลฯ) -> ใช้พื้นหลังไล่สีแทน ยังพรีวิว/เข้า AR ได้
+        cam.style.display = 'none';
+        pvHint.textContent = 'เปิดกล้องไม่ได้ — หมุนดูโมเดลแล้วกดวางจริงได้เลย';
+      }
+    }
+    function stopCamera() {
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    }
+
+    // เข้าสู่ด่านพรีวิว
+    async function enterPreview() {
+      await startCamera();
+      document.body.classList.add('preview-on');
+      pvHud.style.display = 'flex';
+    }
+
+    // ---------- โหลดโมเดลเสร็จ ----------
     mv.addEventListener('load', () => {
-      // ถ้าอุปกรณ์ไม่รองรับ AR ให้ซ่อนปุ่มแล้วแจ้งเตือน
-      if (!mv.canActivateAR) {
-        const btn = document.getElementById('arBtn');
-        if (btn) btn.style.display = 'none';
+      if (mv.canActivateAR) {
+        launchBtn.disabled = false;
+        launchInfo.textContent = 'พร้อมแล้ว — แตะเพื่อเปิดกล้อง';
+      } else {
+        // ไม่รองรับ AR: ยังให้พรีวิว/หมุนดูได้ แต่ซ่อนปุ่มวางจริง
         document.getElementById('unsupported').style.display = 'block';
+        launchBtn.disabled = false;
+        launchBtn.textContent = '📷 พรีวิวโมเดล';
+        launchInfo.textContent = '';
+        placeBtn.style.display = 'none';
+      }
+    });
+
+    // STAGE 1 -> ด่านพรีวิว
+    launchBtn.addEventListener('click', enterPreview);
+
+    // ปุ่มวางจริง -> ปิดกล้องเราแล้วเข้า AR ของ OS
+    placeBtn.addEventListener('click', async () => {
+      stopCamera();
+      try {
+        await mv.activateAR();
+      } catch (e) {
+        // เข้า AR ไม่สำเร็จ -> เปิดกล้องพรีวิวกลับ
+        startCamera();
+      }
+    });
+
+    // ติดตามสถานะ AR: ออกจาก AR แล้วกลับมาด่านพรีวิว (เปิดกล้องใหม่)
+    mv.addEventListener('ar-status', (e) => {
+      const status = e.detail.status;
+      if (status === 'session-started') {
+        enteredAR = true;
+      } else if (status === 'not-presenting' && enteredAR) {
+        enteredAR = false;
+        startCamera();          // กลับมาด่านพรีวิว
       }
     });
   </script>
