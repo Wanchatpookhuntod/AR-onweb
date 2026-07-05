@@ -1,4 +1,4 @@
-# Web AR — model-viewer + Flask
+# Web AR — model-viewer
 
 AR ในเบราว์เซอร์ด้วย **`<model-viewer>`**: แตะวางโมเดล 3D ในโลกจริง รองรับทั้ง iOS และ Android
 
