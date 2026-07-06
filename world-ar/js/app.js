@@ -1,18 +1,54 @@
-// ═══ SPOTS ═══
-const SPOTS = [
-  { id: "prang",    name: "พระปรางค์สามยอด", desc: "ศูนย์กลางพลังขอม",   lat: 14.802964261273392, lng: 100.61404536171183, icon: "🏛️", vfx: "golden" },
-  { id: "menument", name: "วงเวียนสระแก้ว",       desc: "ใจกลางเมือง",  lat: 14.799881897215414, lng: 100.634216288860815, icon: "⛩️", vfx: "sacred" },
-  { id: "wang",     name: "วังนารายณ์",       desc: "ฐานบัญชาการตากสิน", lat: 14.799821766651421, lng: 100.6106419908688, icon: "⚔️", vfx: "battle" },
-  { id: "lotus",    name: "สถานที่บัว",        desc: "ดินแดนแห่งบัวงาม",  lat: 14.80470016742224,  lng: 100.66359567877893, icon: "🪷", vfx: "lotus" },
-];
-const VFX_LABELS = { golden: "✦ SACRED LIGHT", sacred: "◈ RELIC AURA", battle: "⚔ BATTLE FIRE", lotus: "🪷 LOTUS BLOOM" };
+// ═══ SPOTS ═══ (โหลดจาก assets/src/location.json — ไม่ฝังพิกัดไว้ในโค้ด)
+let SPOTS = [];
+const ICON_DIR = 'assets/src/icon-place/';           // ไอคอนแยกตามชื่อ id ของแต่ละสถานที่
+const iconOf = id => `${ICON_DIR}${id}.png`;
+const spotIcons = {};                                // id -> Image (สำหรับวาดบน canvas เข็มทิศ)
+const VFX_CYCLE = ['golden', 'shrine', 'royal', 'lantern', 'khmer', 'forest', 'lotus'];
+// VFX เฉพาะของแต่ละสถานที่ — ผูกตาม id ให้มีเอกลักษณ์ต่างกัน
+const SPOT_VFX = {
+  san_phra_kan: 'shrine',                        // ศาลพระกาฬ — ควันธูป/ประกายไฟแดง
+  wat_phra_si_rattana_mahathat: 'golden',        // วัดพระศรีรัตนมหาธาตุ — แสงทองพระธาตุ
+  somdet_phra_narai_national_museum: 'royal',    // พระราชวังนารายณ์ — รัศมีม่วงหลวง+ประกายทอง
+  ban_wichayen: 'lantern',                       // บ้านวิชาเยนทร์ — โคมไฟอำพันยุโรป
+  phra_prang_sam_yot: 'khmer',                   // พระปรางค์สามยอด — เสาแสงขอมสามยอด
+  wat_pa_tham_sophon: 'forest',                  // วัดป่าธรรมโสภณ — หิ่งห้อย/ใบไม้ป่า
+  wat_tong_pu: 'lotus',                          // วัดตองปุ — กลีบบัวชมพู
+};
+const VFX_LABELS = {
+  golden: "✦ SACRED LIGHT", shrine: "🔥 SPIRIT EMBERS", royal: "♛ ROYAL RADIANCE",
+  lantern: "🏮 LANTERN GLOW", khmer: "◈ KHMER SPIRES", forest: "🍃 FOREST SPIRITS",
+  lotus: "🪷 LOTUS BLOOM", sacred: "◈ RELIC AURA", battle: "⚔ BATTLE FIRE",
+};
+// สีประจำเอฟเฟกต์ — ใช้กับเลเยอร์แสงศักดิ์สิทธิ์ (god-rays/บลูม/ดาวประกาย)
+const VFX_TINT = {
+  golden: [255, 210, 90], shrine: [255, 95, 40], royal: [190, 130, 255],
+  lantern: [255, 185, 95], khmer: [240, 155, 75], forest: [140, 245, 130],
+  lotus: [255, 155, 210], sacred: [255, 250, 220], battle: [255, 85, 30],
+};
 const AIM_DEG = 22, UNLOCK_M = 200;
+
+// โหลดสถานที่จากไฟล์ JSON แล้ว map เป็นรูปแบบที่แอปใช้
+const spotsReady = fetch('assets/src/location.json')
+  .then(r => r.json())
+  .then(data => {
+    SPOTS = data.map((s, i) => ({
+      id: s.id, name: s.name, desc: s.desc || '',
+      lat: s.lat, lng: s.lng,
+      icon: iconOf(s.id),                            // ไอคอนเฉพาะของสถานที่ (icon-place/<id>.png)
+      vfx: SPOT_VFX[s.id] || VFX_CYCLE[i % VFX_CYCLE.length],  // VFX เฉพาะตาม id
+    }));
+    // preload รูปไอคอนไว้ก่อน สำหรับวาดบนแถบเข็มทิศ
+    SPOTS.forEach(s => { const im = new Image(); im.src = s.icon; spotIcons[s.id] = im; });
+    return SPOTS;
+  })
+  .catch(e => { console.error('โหลด location.json ไม่สำเร็จ:', e); return SPOTS; });
 
 // ═══ STATE ═══
 let userLat = null, userLng = null, rawH = 0, smoothH = 0;
 let aimedSpot = null, activeVFX = null, vfxFade = 0;
 let unlocked = loadUnlocked(), toastTimer = null, T = 0;
-let ps = [], ss = [];
+let ps = [], ss = [], sparks = [];   // sparks = สะเก็ดไฟ (ใช้เฉพาะ vfxShrine)
+let auraStars = [];                   // ดาวประกายของเลเยอร์แสงศักดิ์สิทธิ์ (grandAura)
 let headingOffset = parseInt(localStorage.getItem('headingOffset') || '0', 10);
 let hBuf = [], compassAccuracy = 1;
 let hwAccuracy = -1;              // iOS ฮาร์ดแวร์: 0-1 (-1 = ไม่รู้)
@@ -34,12 +70,6 @@ function saveUnlocked() {
 const cv = document.getElementById('vfx');
 const ctx = cv.getContext('2d');
 function resizeCV() { cv.width = innerWidth; cv.height = innerHeight; spawnParticles(); }
-
-// ไอคอน spot บนแถบเข็มทิศ — ใช้รูปเดียวกันทุกสถานที่
-const placeIcon = new Image();
-let placeIconReady = false;
-placeIcon.onload = () => { placeIconReady = true; };
-placeIcon.src = 'assets/icon-place.png';
 
 // ═══ MATH ═══
 function hav(a, b, c, d) {
@@ -78,8 +108,8 @@ function mkS(W, H) {
 }
 function spawnParticles() {
   const W = cv.width, H = cv.height;
-  ps = Array.from({ length: 100 }, () => mkP(W, H));
-  ss = Array.from({ length: 35 }, () => mkS(W, H));
+  ps = Array.from({ length: 160 }, () => mkP(W, H));
+  ss = Array.from({ length: 50 }, () => mkS(W, H));
 }
 
 // ═══ START ═══
@@ -119,6 +149,7 @@ async function startApp() {
     if (perm) perm.style.display = 'none';
     if (hud) hud.style.display = 'block';
 
+    await spotsReady;               // ให้แน่ใจว่าโหลดสถานที่จาก location.json เสร็จก่อน
     resizeCV();
     window.addEventListener('resize', resizeCV);
     startGPS();
@@ -152,7 +183,7 @@ function buildModelGrid() {
     card.className = 'model-card';
     card.dataset.id = spot.id;
     card.innerHTML = `
-      <div class="model-card-icon">${spot.icon}</div>
+      <div class="model-card-icon"><img src="${spot.icon}" alt=""></div>
       <div class="model-card-name">${spot.name}</div>
       <div class="model-card-desc">${spot.desc}</div>
     `;
@@ -380,29 +411,35 @@ function drawCompass() {
       const b = bear(userLat, userLng, s.lat, s.lng);
       const px = W / 2 + adiff(smoothH, b) * SP;
       if (px < 8 || px > W - 8) return;
-      vis.push({ s, px, isHot: aimedSpot === s.id });
+      const dist = hav(userLat, userLng, s.lat, s.lng);
+      vis.push({ s, px, dist, isHot: aimedSpot === s.id });
     });
     vis.sort((a, b) => a.px - b.px);
+    // ระยะที่ใกล้ที่สุด — ตัวที่ใกล้สุดจะทึบเต็ม ที่เหลือจางลงตามระยะ
+    const minDist = vis.length ? Math.min(...vis.map(v => v.dist)) : 0;
 
     let lastIconPx = -Infinity;   // กันไอคอนซ้อนกัน (ทิศใกล้กัน)
     vis.forEach(v => {
       const { px, isHot } = v;
+      // ตัวที่ใกล้สุด (หรือกำลังเล็ง) = ทึบเต็ม, ที่เหลือจางเท่ากันหมดที่ .6
+      const distAlpha = (isHot || v.dist <= minDist + 1) ? 1 : 0.6;
       // วงกลมตำแหน่งสถานที่ (ด้านบน) — วาดทุกตัว
-      x.globalAlpha = isHot ? 1 : .8;
+      x.globalAlpha = distAlpha;
       x.beginPath(); x.arc(px, 8, isHot ? 5 : 3.5, 0, Math.PI * 2);
       x.fillStyle = isHot ? '#F0D080' : 'rgba(201,168,76,.7)'; x.fill();
       // ไอคอนสถานที่ — ข้ามถ้าซ้อนกับตัวก่อนหน้า (เว้นแต่ตัวที่กำลังเล็ง)
       const tooClose = (px - lastIconPx) < 22;
       if (tooClose && !isHot) { x.globalAlpha = 1; return; }
       lastIconPx = px;
-      x.globalAlpha = 1;
-      if (placeIconReady) {
+      x.globalAlpha = distAlpha;
+      const img = spotIcons[v.s.id];
+      if (img && img.complete && img.naturalWidth) {
         const sz = isHot ? 30 : 26;
-        x.drawImage(placeIcon, px - sz / 2, 36 - sz / 2, sz, sz);
+        x.drawImage(img, px - sz / 2, 36 - sz / 2, sz, sz);
       } else {
-        x.font = '26px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-        x.fillText(v.s.icon, px, 36);
-        x.textBaseline = 'alphabetic';
+        // fallback ระหว่างรูปยังโหลดไม่เสร็จ — จุดกลม
+        x.beginPath(); x.arc(px, 36, isHot ? 6 : 5, 0, Math.PI * 2);
+        x.fillStyle = isHot ? '#F0D080' : 'rgba(201,168,76,.7)'; x.fill();
       }
       x.globalAlpha = 1;
     });
@@ -556,7 +593,8 @@ function checkAim() {
   if (active) {
     aimedSpot = active.id;
     const dist = hav(userLat, userLng, active.lat, active.lng);
-    document.getElementById('pop-icon').textContent = active.icon;
+    const popImg = document.querySelector('#pop-icon img');
+    if (popImg && popImg.getAttribute('src') !== active.icon) popImg.src = active.icon;
     document.getElementById('pop-name').textContent = active.name;
     document.getElementById('pop-dist').textContent = dist < 1000 ? `${Math.round(dist)}m` : `${(dist / 1000).toFixed(1)}km`;
     document.getElementById('b-name').textContent = active.name;
@@ -590,12 +628,80 @@ function drawVFX(t) {
   else if (activeVFX === 'sacred') vfxSacred(t, W, H, fade);
   else if (activeVFX === 'battle') vfxBattle(t, W, H, fade);
   else if (activeVFX === 'lotus')  vfxLotus(t, W, H, fade);
+  else if (activeVFX === 'shrine') vfxShrine(t, W, H, fade);
+  else if (activeVFX === 'royal')  vfxRoyal(t, W, H, fade);
+  else if (activeVFX === 'lantern') vfxLantern(t, W, H, fade);
+  else if (activeVFX === 'khmer')  vfxKhmer(t, W, H, fade);
+  else if (activeVFX === 'forest') vfxForest(t, W, H, fade);
+
+  // เลเยอร์แสงศักดิ์สิทธิ์ร่วม — ทำให้ทุกเอฟเฟกต์ดูอลังการขึ้น
+  grandAura(t, W, H, fade, VFX_TINT[activeVFX] || [255, 210, 90]);
 
   const vg = ctx.createRadialGradient(W / 2, H / 2, H * .18, W / 2, H / 2, H * .85);
   vg.addColorStop(0, 'rgba(5,3,1,0)'); vg.addColorStop(1, `rgba(5,3,1,${.55 * fade})`);
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 
   if (fade > .5) drawFrame(t, W, H, fade);
+}
+
+// ═══ เลเยอร์แสงศักดิ์สิทธิ์ร่วม (cinematic) ═══
+// god-rays หมุน + บลูมเต้นจังหวะ + ดาวประกาย ใช้ additive ให้ฟุ้งสว่างอลังการ
+function grandAura(t, W, H, fade, col) {
+  const [r, g, b] = col;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  // 1) ลำแสงหมุนออกจากบนกลางจอ (volumetric god-rays)
+  const cx = W / 2, cy = -H * 0.05, rays = 16, len = H * 1.4;
+  for (let i = 0; i < rays; i++) {
+    const a = (i / rays) * Math.PI * 2 + t * 0.12;
+    const flick = 0.4 + 0.6 * Math.sin(t * 1.3 + i * 1.7);
+    const wdt = 0.05 + 0.03 * Math.sin(t * 0.7 + i);
+    const al = 0.05 * Math.max(0, flick) * fade;
+    if (al <= 0.002) continue;
+    const gr = ctx.createLinearGradient(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+    gr.addColorStop(0, `rgba(${r},${g},${b},${al})`);
+    gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a - wdt) * len, cy + Math.sin(a - wdt) * len);
+    ctx.lineTo(cx + Math.cos(a + wdt) * len, cy + Math.sin(a + wdt) * len);
+    ctx.closePath(); ctx.fillStyle = gr; ctx.fill();
+  }
+
+  // 2) แสงบลูมกลางจอเต้นเป็นจังหวะ
+  const pulse = 0.6 + 0.4 * Math.sin(t * 1.6);
+  const br = H * (0.36 + 0.05 * Math.sin(t * 1.6));
+  const bg = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, br);
+  bg.addColorStop(0, `rgba(${r},${g},${b},${0.11 * pulse * fade})`);
+  bg.addColorStop(0.5, `rgba(${r},${g},${b},${0.04 * pulse * fade})`);
+  bg.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.arc(W / 2, H * 0.4, br, 0, Math.PI * 2); ctx.fill();
+
+  // 3) ดาวประกายกระพริบทั่วจอ (มีประกายเส้นบวก)
+  if (!auraStars.length)
+    auraStars = Array.from({ length: 70 }, () => ({
+      x: Math.random(), y: Math.random() * 0.75,
+      ph: Math.random() * 6.28, sz: 0.6 + Math.random() * 1.8,
+    }));
+  auraStars.forEach(s => {
+    const tw = Math.sin(t * 2 + s.ph);
+    if (tw <= 0) return;
+    const al = tw * 0.85 * fade;
+    const px = s.x * W, py = s.y * H, sz = s.sz * (1 + tw);
+    const gr = ctx.createRadialGradient(px, py, 0, px, py, sz * 4);
+    gr.addColorStop(0, `rgba(${r},${g},${b},${al})`);
+    gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(px, py, sz * 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,255,255,${al * 0.7})`; ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(px - sz * 3.2, py); ctx.lineTo(px + sz * 3.2, py);
+    ctx.moveTo(px, py - sz * 3.2); ctx.lineTo(px, py + sz * 3.2);
+    ctx.stroke();
+  });
+
+  ctx.restore();
 }
 
 function vfxGolden(t, W, H, fade) {
@@ -693,6 +799,192 @@ function vfxBattle(t, W, H, fade) {
     gr.addColorStop(0, `rgba(75,50,35,${a})`); gr.addColorStop(1, 'rgba(75,50,35,0)');
     ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
   });
+}
+
+// สะเก็ดไฟ — พุ่งกระจายจากฐาน มีหางลากสั้นๆ
+function mkSpark(W, H) {
+  const ang = -Math.PI / 2 + (Math.random() - .5) * 2.2;   // พุ่งขึ้นแบบกระจายกว้าง
+  const sp = 3 + Math.random() * 6;
+  return {
+    x: Math.random() * W,                                  // กระจายทั่วความกว้างจอ
+    y: H * .55 + Math.random() * H * .45,                  // ปล่อยจากครึ่งล่างทั้งแถบ
+    vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+    life: 0, maxLife: .5 + Math.random() * .7,
+    len: 6 + Math.random() * 12,
+  };
+}
+
+// ═══ ศาลพระกาฬ — ควันธูปแดง + ประกายไฟ + สะเก็ดไฟ ═══
+function vfxShrine(t, W, H, fade) {
+  // ควันธูปสีแดงเข้มลอยขึ้นจากกลางล่าง
+  ss.forEach((s, i) => {
+    s.x += s.vx + Math.sin(t * .4 + s.phase) * .4; s.y += s.vy * .8; s.life += .0025;
+    if (s.y < -160 || s.life > 1) {
+      ss[i] = { ...mkS(W, H), x: W * .5 + (Math.random() - .5) * W * .35, y: H * .82 + Math.random() * H * .15, vy: -(0.3 + Math.random() * .6) };
+      return;
+    }
+    const a = s.opacity * Math.sin(s.life * Math.PI) * fade * 1.3;
+    const gr = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size);
+    gr.addColorStop(0, `rgba(120,32,22,${a})`); gr.addColorStop(1, 'rgba(70,14,10,0)');
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+  });
+  // ประกายไฟ (embers) ลอยขึ้น กระพริบ
+  ps.forEach((p, i) => {
+    p.x += p.vx + Math.sin(t * 1.5 + p.phase) * .5; p.y += p.vy * 1.2; p.life += .006;
+    if (p.y < -30 || p.life > p.maxLife) {
+      ps[i] = { ...mkP(W, H), y: H * .6 + Math.random() * H * .45, vy: -(0.6 + Math.random() * 1.7) };
+      return;
+    }
+    const al = Math.sin(p.life / p.maxLife * Math.PI) * .9 * fade;
+    const fl = 0.6 + 0.4 * Math.sin(t * 8 + p.phase);
+    const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3.5);
+    gr.addColorStop(0, `rgba(255,${140 + Math.floor(70 * fl)},60,${al})`);
+    gr.addColorStop(.6, `rgba(220,60,20,${al * .4})`);
+    gr.addColorStop(1, 'rgba(120,20,0,0)');
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3.5, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+  });
+  // สะเก็ดไฟพุ่งกระจาย — หัวสว่าง หางลากสั้น ตกด้วยแรงโน้มถ่วง
+  if (!sparks.length) sparks = Array.from({ length: 110 }, () => mkSpark(W, H));
+  sparks.forEach((k, i) => {
+    k.vy += 0.12;                     // แรงโน้มถ่วงดึงลง
+    k.vx *= 0.99;
+    k.x += k.vx; k.y += k.vy; k.life += 0.02;
+    if (k.life > k.maxLife || k.y > H + 20) { sparks[i] = mkSpark(W, H); return; }
+    const al = (1 - k.life / k.maxLife) * fade;
+    const sp = Math.hypot(k.vx, k.vy) || 1;
+    const tx = k.x - (k.vx / sp) * k.len, ty = k.y - (k.vy / sp) * k.len;
+    const g = ctx.createLinearGradient(k.x, k.y, tx, ty);
+    g.addColorStop(0, `rgba(255,240,190,${al})`);
+    g.addColorStop(.5, `rgba(255,160,50,${al * .6})`);
+    g.addColorStop(1, 'rgba(255,80,0,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.beginPath(); ctx.arc(k.x, k.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,248,220,${al})`; ctx.fill();
+  });
+
+  // แสงเรืองแดงเข้มขอบล่าง
+  const hg = ctx.createLinearGradient(0, H * .5, 0, H);
+  hg.addColorStop(0, 'rgba(80,10,5,0)'); hg.addColorStop(1, `rgba(130,22,12,${(.12 + .04 * Math.sin(t * .9)) * fade})`);
+  ctx.fillStyle = hg; ctx.fillRect(0, H * .5, W, H * .5);
+}
+
+// ═══ พระราชวังนารายณ์ — รัศมีม่วงหลวง + ประกายทองรูปดาว ═══
+function vfxRoyal(t, W, H, fade) {
+  const bg = ctx.createRadialGradient(W / 2, H * .35, H * .05, W / 2, H * .35, H * .95);
+  bg.addColorStop(0, `rgba(120,70,190,${.10 * fade})`);
+  bg.addColorStop(.5, `rgba(70,40,130,${.06 * fade})`);
+  bg.addColorStop(1, 'rgba(30,15,60,0)');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // เสาแสงทองส่องลงจากด้านบน
+  for (let i = 0; i < 5; i++) {
+    const cx = W * (0.2 + i * 0.15), a = (0.03 + 0.02 * Math.sin(t * .7 + i)) * fade;
+    const g = ctx.createLinearGradient(cx, 0, cx, H * .9);
+    g.addColorStop(0, `rgba(255,225,140,${a * 3})`);
+    g.addColorStop(1, 'rgba(200,150,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(cx - 25, 0, 50, H * .9);
+  }
+  // ประกายทองรูปดาวสี่แฉก (royal sparkle)
+  ps.forEach((p, i) => {
+    p.x += p.vx * .6 + Math.sin(t * .8 + p.phase) * .3; p.y += p.vy * .5; p.life += .004;
+    if (p.y < -40 || p.life > p.maxLife) { ps[i] = mkP(W, H); return; }
+    const al = Math.sin(p.life / p.maxLife * Math.PI) * .95 * fade;
+    const tw = 0.5 + 0.5 * Math.sin(t * 3 + p.phase);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(t * .4 + p.phase);
+    ctx.globalAlpha = al * tw; ctx.fillStyle = '#FFE59A';
+    const s = p.size * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 3); ctx.lineTo(s * .5, -s * .5); ctx.lineTo(s * 3, 0); ctx.lineTo(s * .5, s * .5);
+    ctx.lineTo(0, s * 3); ctx.lineTo(-s * .5, s * .5); ctx.lineTo(-s * 3, 0); ctx.lineTo(-s * .5, -s * .5);
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ═══ บ้านวิชาเยนทร์ — โคมไฟ/หิ่งห้อยอำพันยุโรป ═══
+function vfxLantern(t, W, H, fade) {
+  const bg = ctx.createRadialGradient(W / 2, H * .5, H * .1, W / 2, H * .5, H);
+  bg.addColorStop(0, `rgba(90,60,25,${.05 * fade})`);
+  bg.addColorStop(1, 'rgba(40,25,10,0)');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // ดวงไฟอำพันลอยขึ้นช้าๆ แกว่งไปมา กระพริบเหมือนเปลวเทียน
+  ps.forEach((p, i) => {
+    p.x += p.vx * .5 + Math.sin(t * .6 + p.phase) * .6; p.y += p.vy * .4; p.life += .0025;
+    if (p.y < -40 || p.life > p.maxLife) { ps[i] = { ...mkP(W, H), y: H * .5 + Math.random() * H * .5 }; return; }
+    const al = Math.sin(p.life / p.maxLife * Math.PI) * fade;
+    const glow = 0.55 + 0.45 * Math.sin(t * 2.5 + p.phase);
+    const r = p.size * 4;
+    const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    gr.addColorStop(0, `rgba(255,220,140,${al * glow})`);
+    gr.addColorStop(.4, `rgba(255,170,70,${al * glow * .5})`);
+    gr.addColorStop(1, 'rgba(180,100,30,0)');
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * .8, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,245,210,${al * glow})`; ctx.fill();
+  });
+}
+
+// ═══ พระปรางค์สามยอด — เสาแสงขอมสามยอด + ฝุ่นหินโบราณ ═══
+function vfxKhmer(t, W, H, fade) {
+  const cols = [W * 0.3, W * 0.5, W * 0.7];
+  cols.forEach((cx, i) => {
+    const pulse = 0.6 + 0.4 * Math.sin(t * 1.1 + i * 2.1);
+    const w = (i === 1 ? 46 : 36);              // ยอดกลางใหญ่สุด
+    const g = ctx.createLinearGradient(cx, H, cx, 0);
+    g.addColorStop(0, `rgba(210,120,50,${.28 * pulse * fade})`);
+    g.addColorStop(.5, `rgba(230,160,80,${.12 * pulse * fade})`);
+    g.addColorStop(1, 'rgba(180,90,40,0)');
+    ctx.beginPath();
+    ctx.moveTo(cx - w, H); ctx.lineTo(cx - w * .15, H * .08);
+    ctx.lineTo(cx + w * .15, H * .08); ctx.lineTo(cx + w, H);
+    ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+    const tip = ctx.createRadialGradient(cx, H * .1, 0, cx, H * .1, 40);
+    tip.addColorStop(0, `rgba(255,210,130,${.5 * pulse * fade})`);
+    tip.addColorStop(1, 'rgba(230,150,70,0)');
+    ctx.beginPath(); ctx.arc(cx, H * .1, 40, 0, Math.PI * 2); ctx.fillStyle = tip; ctx.fill();
+  });
+  // ฝุ่นหินโบราณลอย
+  ps.forEach((p, i) => {
+    p.x += p.vx + Math.sin(t * .5 + p.phase) * .3; p.y += p.vy * .7; p.life += .004;
+    if (p.y < -30 || p.life > p.maxLife) { ps[i] = mkP(W, H); return; }
+    const al = Math.sin(p.life / p.maxLife * Math.PI) * .7 * fade;
+    const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+    gr.addColorStop(0, `rgba(220,170,110,${al})`); gr.addColorStop(1, 'rgba(150,100,60,0)');
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+  });
+}
+
+// ═══ วัดป่าธรรมโสภณ — หิ่งห้อยเขียว + ใบไม้ปลิว ═══
+function vfxForest(t, W, H, fade) {
+  const bg = ctx.createRadialGradient(W / 2, H * .5, H * .05, W / 2, H * .5, H * .9);
+  bg.addColorStop(0, `rgba(60,140,70,${.06 * fade})`);
+  bg.addColorStop(.6, `rgba(30,90,50,${.04 * fade})`);
+  bg.addColorStop(1, 'rgba(15,50,30,0)');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // หิ่งห้อยเขียวอมเหลือง กระพริบเป็นจังหวะ
+  ps.forEach((p, i) => {
+    p.x += p.vx + Math.sin(t * 1.1 + p.phase) * .7; p.y += p.vy * .4 + Math.cos(t * .8 + p.phase) * .3; p.life += .004;
+    if (p.y < -30 || p.life > p.maxLife) { ps[i] = mkP(W, H); return; }
+    const al = Math.sin(p.life / p.maxLife * Math.PI) * fade;
+    const blink = Math.max(0, Math.sin(t * 3 + p.phase));
+    const r = p.size * 3;
+    const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    gr.addColorStop(0, `rgba(190,255,140,${al * blink})`);
+    gr.addColorStop(.5, `rgba(120,220,90,${al * blink * .4})`);
+    gr.addColorStop(1, 'rgba(60,150,50,0)');
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+  });
+  // ใบไม้ปลิวลงจากด้านบน (ใช้ ss)
+  ss.forEach((s, i) => {
+    s.x += s.vx + Math.sin(t * .6 + s.phase) * .8; s.y += Math.abs(s.vy) * .6 + .3; s.life += .003;
+    if (s.y > H + 40 || s.life > 1) { ss[i] = { ...mkS(W, H), y: -20 - Math.random() * 60 }; return; }
+    const a = Math.min(.5, s.opacity * 4) * Math.sin(s.life * Math.PI) * fade;
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(t * .6 + s.phase);
+    ctx.globalAlpha = a;
+    ctx.beginPath(); ctx.ellipse(0, 0, s.size * .12, s.size * .06, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#4E9A4E'; ctx.fill(); ctx.restore();
+  });
+  ctx.globalAlpha = 1;
 }
 
 // วาดกลีบบัวหนึ่งกลีบ (รูปทรงรี-แหลม เหมือนกลีบบัว/ซากุระ)
@@ -803,7 +1095,7 @@ function drawFrame(t, W, H, fade) {
 function buildChips() {
   const el = document.getElementById('b-chips');
   SPOTS.forEach(s => {
-    el.innerHTML += `<div class="chip" data-id="${s.id}" style="display:none"><div class="cd"></div>${s.icon} ${s.name}<span id="cd-${s.id}" style="margin-left:4px;font-size:9px;opacity:.5">---</span></div>`;
+    el.innerHTML += `<div class="chip" data-id="${s.id}" style="display:none"><div class="cd"></div><img class="chip-icon" src="${s.icon}" alt=""> ${s.name}<span id="cd-${s.id}" style="margin-left:4px;font-size:9px;opacity:.5">---</span></div>`;
   });
 }
 function updateChips() {
@@ -817,12 +1109,100 @@ function updateChips() {
 
 // ═══ TOAST ═══
 function showToast(icon, title, sub) {
-  document.getElementById('t-icon').textContent = icon;
+  const ic = document.getElementById('t-icon');
+  if (icon && /\.(png|svg|jpg|webp)$|assets\//.test(icon)) ic.innerHTML = `<img src="${icon}" alt="">`;
+  else ic.textContent = icon;
   document.getElementById('t-title').textContent = title;
   document.getElementById('t-sub').textContent = sub;
   const el = document.getElementById('toast');
   el.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ═══ PHOTO CAPTURE ═══ (รวมภาพกล้อง + ชั้น VFX + ลายน้ำ)
+let lastPhotoBlob = null;
+
+function capturePhoto() {
+  const video = document.getElementById('video');
+  const W = innerWidth, H = innerHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const out = document.createElement('canvas');
+  out.width = W * dpr; out.height = H * dpr;
+  const o = out.getContext('2d');
+  o.scale(dpr, dpr);
+
+  // 1) ภาพจากกล้อง — จัดแบบ cover ให้ตรงกับที่เห็นบนจอ
+  if (video && video.videoWidth) {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const scale = Math.max(W / vw, H / vh);
+    const dw = vw * scale, dh = vh * scale;
+    o.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  } else {
+    o.fillStyle = '#050301'; o.fillRect(0, 0, W, H);
+  }
+
+  // 2) ชั้น VFX (canvas เต็มจอ) ทับลงไป
+  o.drawImage(cv, 0, 0, W, H);
+
+  // 3) ลายน้ำ ชื่องาน + สถานที่ที่กำลังเล็ง
+  o.save();
+  o.textBaseline = 'alphabetic';
+  o.shadowColor = 'rgba(0,0,0,.6)'; o.shadowBlur = 8;
+  o.textAlign = 'left';
+  o.fillStyle = 'rgba(240,208,128,.96)';
+  o.font = `600 ${Math.round(W * 0.05)}px "DM Serif Display", serif`;
+  o.fillText('ตามรอยพระเจ้าตาก', W * 0.05, H * 0.94);
+  const spot = SPOTS.find(s => s.id === aimedSpot);
+  if (spot) {
+    o.fillStyle = 'rgba(255,255,255,.92)';
+    o.font = `${Math.round(W * 0.033)}px sans-serif`;
+    o.fillText('◈ ' + spot.name, W * 0.05, H * 0.975);
+  }
+  o.restore();
+
+  // แฟลช + สร้างไฟล์
+  flashScreen();
+  out.toBlob(blob => {
+    if (!blob) return;
+    lastPhotoBlob = blob;
+    const img = document.getElementById('photo-img');
+    if (img.src) URL.revokeObjectURL(img.src);
+    img.src = URL.createObjectURL(blob);
+    document.getElementById('photo-preview').classList.add('show');
+  }, 'image/jpeg', 0.92);
+}
+
+function flashScreen() {
+  const f = document.getElementById('flash');
+  if (!f) return;
+  f.classList.add('on');
+  setTimeout(() => f.classList.remove('on'), 200);
+}
+
+function photoFileName() { return `taksin-ar-${Date.now()}.jpg`; }
+
+function savePhoto() {
+  if (!lastPhotoBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(lastPhotoBlob);
+  a.download = photoFileName();
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function sharePhoto() {
+  if (!lastPhotoBlob) return;
+  const file = new File([lastPhotoBlob], photoFileName(), { type: 'image/jpeg' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'ตามรอยพระเจ้าตาก' }); }
+    catch (e) { /* ผู้ใช้ยกเลิก */ }
+  } else {
+    savePhoto();   // เบราว์เซอร์ไม่รองรับแชร์ไฟล์ → บันทึกแทน
+  }
+}
+
+function closePhoto() {
+  document.getElementById('photo-preview').classList.remove('show');
 }
 
 // ═══ MAIN LOOP ═══

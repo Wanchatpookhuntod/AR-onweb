@@ -37,6 +37,28 @@ ngrok http 5000
 
 > เปลี่ยนพอร์ต: `node server.js --https --port 5001`
 
+## Deploy ขึ้น Google Cloud Run
+
+Cloud Run จัดการ HTTPS ให้ที่ edge และส่ง HTTP เข้า container ผ่าน `$PORT` — `server.js` อ่าน env นี้แล้วเข้าโหมด production อัตโนมัติ (ไม่เปิด self-signed HTTPS / ไม่ redirect เอง)
+
+```bash
+# ครั้งแรก: ตั้งโปรเจกต์ + เปิด API ที่จำเป็น
+gcloud config set project <PROJECT_ID>
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com
+
+# build จาก Dockerfile + deploy (เปิดสาธารณะ)
+gcloud run deploy web-ar \
+  --source . \
+  --region asia-southeast1 \
+  --allow-unauthenticated
+```
+
+เสร็จแล้วได้ URL `https://web-ar-xxxxx.a.run.app` (เป็น HTTPS จริง ใช้กล้อง/GPS บนมือถือได้)
+
+> - ไม่ต้องตั้ง `PORT` เอง — Cloud Run inject ให้ (ค่าเริ่มต้น 8080)
+> - เตรียม `Dockerfile`, `.dockerignore`, `.gcloudignore` ไว้ให้แล้ว
+> - ทดสอบ container ที่เครื่อง: `docker build -t web-ar . && docker run -e PORT=8080 -p 8080:8080 web-ar`
+
 ## วิธีใช้
 1. เปิดหน้าเว็บ รอโมเดลโหลดเสร็จ
 2. กด **🚀 เริ่ม AR** → อนุญาตกล้อง

@@ -1,0 +1,14 @@
+# ไฟล์ที่ไม่ต้องอัปโหลดไป Cloud Build (Dockerfile ต้องคงไว้)
+.git
+.gitignore
+.gcloudignore
+.dockerignore
+node_modules
+npm-debug.log
+.DS_Store
+*.log
+venv
+__pycache__
+*.pyc
+.claude
+**/*.psd

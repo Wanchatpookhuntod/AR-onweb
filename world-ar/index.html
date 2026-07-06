@@ -119,7 +119,7 @@
   </div>
 
   <div id="popup">
-    <div id="pop-icon">🏛️</div>
+    <div id="pop-icon"><img src="" alt=""></div>
     <div id="pop-name">พระปรางค์สามยอด</div>
     <div id="pop-dist">---</div>
   </div>
@@ -142,6 +142,22 @@
   </div>
 
   <button id="cal-btn" onclick="openCal()">⊕ ปรับทิศ</button>
+
+  <!-- ปุ่มถ่ายรูป -->
+  <button id="shot-btn" onclick="capturePhoto()" aria-label="ถ่ายรูป"><span></span></button>
+</div>
+
+<!-- แฟลชตอนถ่าย -->
+<div id="flash"></div>
+
+<!-- พรีวิวรูปที่ถ่าย -->
+<div id="photo-preview">
+  <img id="photo-img" alt="รูปที่ถ่าย">
+  <div class="photo-actions">
+    <button class="photo-btn ghost" onclick="closePhoto()">↺ ถ่ายใหม่</button>
+    <button class="photo-btn" onclick="savePhoto()">⤓ บันทึก</button>
+    <button class="photo-btn gold" onclick="sharePhoto()">↗ แชร์</button>
+  </div>
 </div>
 
 <div id="cal-panel">

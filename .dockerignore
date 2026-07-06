@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.DS_Store
+*.log
+venv
+__pycache__
+*.pyc
+.claude
+README.md
+Dockerfile
+.dockerignore
+.gcloudignore
+**/*.psd

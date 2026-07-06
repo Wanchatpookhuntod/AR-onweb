@@ -29,7 +29,11 @@ const os = require('os');
 const argv = process.argv.slice(2);
 const useHttps = argv.includes('--https');
 const portIdx = argv.indexOf('--port');
-const PORT = portIdx !== -1 && argv[portIdx + 1] ? parseInt(argv[portIdx + 1], 10) : 5000;
+// production (Cloud Run ฯลฯ) จะ inject env PORT + จัดการ TLS ให้ที่ edge
+const IS_CLOUD = !!process.env.PORT || process.env.NODE_ENV === 'production';
+const PORT = process.env.PORT
+  ? parseInt(process.env.PORT, 10)
+  : (portIdx !== -1 && argv[portIdx + 1] ? parseInt(argv[portIdx + 1], 10) : 5000);
 
 const ROOT = __dirname;
 const TEMPLATES = path.join(ROOT, 'templates');
@@ -54,6 +58,13 @@ const MIME = {
   '.bin': 'application/octet-stream',
 };
 
+// dev: ปิด cache เพื่อให้แก้ไฟล์แล้วเห็นผลทันที / prod: cache asset, ไม่ cache html-json
+function cacheFor(ext) {
+  if (!IS_CLOUD) return 'no-store';
+  if (ext === '.html' || ext === '.json') return 'no-cache';
+  return 'public, max-age=3600';
+}
+
 function sendFile(res, filePath) {
   fs.readFile(filePath, (err, data) => {
     if (err) {
@@ -64,7 +75,7 @@ function sendFile(res, filePath) {
     const ext = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': 'no-store', // ปิด cache เพื่อให้แก้ไฟล์แล้วเห็นผลทันทีตอน dev
+      'Cache-Control': cacheFor(ext),
     });
     res.end(data);
   });
@@ -178,47 +189,52 @@ function printQr(url) {
 }
 
 // ---------- start ----------
-const ip = getLocalIp();
-const HTTPS_PORT = PORT + 1; // HTTP=5001, HTTPS=5002 (or --port offset)
+if (IS_CLOUD) {
+  // ── Production (Cloud Run ฯลฯ) ──
+  // TLS ถูก terminate ที่ edge แล้ว container รับ HTTP ล้วนบน $PORT — ห้าม redirect เป็น https เอง
+  http.createServer(handler).listen(PORT, '0.0.0.0', () => {
+    console.log(`Web AR server (production) listening on 0.0.0.0:${PORT}`);
+  });
+} else {
+  // ── Local dev: HTTP (localhost) + HTTPS self-signed (สำหรับมือถือใน WiFi เดียวกัน) + QR ──
+  const ip = getLocalIp();
+  const HTTPS_PORT = PORT + 1;
 
-// HTTP server: localhost → serve normally, IP → redirect to HTTPS
-const httpServer = http.createServer((req, res) => {
-  const host = req.headers.host || '';
-  const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-  if (!isLocalhost) {
-    // Redirect non-localhost HTTP → HTTPS (port HTTPS_PORT)
-    const httpsUrl = `https://${ip}:${HTTPS_PORT}${req.url}`;
-    res.writeHead(301, { Location: httpsUrl });
-    res.end();
-    return;
-  }
-  handler(req, res);
-});
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log('='.repeat(56));
-  console.log(`  HTTP  (localhost) : http://localhost:${PORT}`);
-  console.log(`  เปิดบนเครื่องนี้ : http://localhost:${PORT}`);
-  console.log('='.repeat(56));
-});
-
-// Always start HTTPS server (works on mobile/IP)
-let pems;
-try {
-  const selfsigned = require('selfsigned');
-  pems = selfsigned.generate(
-    [{ name: 'commonName', value: ip }],
-    { days: 365, keySize: 2048 }
-  );
-  const httpsServer = https.createServer({ key: pems.private, cert: pems.cert }, handler);
-  httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
-    console.log(`  HTTPS (มือถือ)   : https://${ip}:${HTTPS_PORT}`);
+  const httpServer = http.createServer((req, res) => {
+    const host = req.headers.host || '';
+    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+    if (!isLocalhost) {
+      const httpsUrl = `https://${ip}:${HTTPS_PORT}${req.url}`;
+      res.writeHead(301, { Location: httpsUrl });
+      res.end();
+      return;
+    }
+    handler(req, res);
+  });
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log('='.repeat(56));
-    console.log('  ** มือถือต้องอยู่ WiFi เดียวกัน **');
-    console.log('  ** กด Advanced → Proceed เมื่อเตือน cert **');
-    printQr(`https://${ip}:${HTTPS_PORT}`);
+    console.log(`  HTTP  (localhost) : http://localhost:${PORT}`);
+    console.log(`  เปิดบนเครื่องนี้ : http://localhost:${PORT}`);
     console.log('='.repeat(56));
   });
-} catch (e) {
-  console.log('  (รัน npm install เพื่อเปิด HTTPS สำหรับมือถือ)');
-  console.log('='.repeat(56));
+
+  try {
+    const selfsigned = require('selfsigned');
+    const pems = selfsigned.generate(
+      [{ name: 'commonName', value: ip }],
+      { days: 365, keySize: 2048 }
+    );
+    const httpsServer = https.createServer({ key: pems.private, cert: pems.cert }, handler);
+    httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+      console.log(`  HTTPS (มือถือ)   : https://${ip}:${HTTPS_PORT}`);
+      console.log('='.repeat(56));
+      console.log('  ** มือถือต้องอยู่ WiFi เดียวกัน **');
+      console.log('  ** กด Advanced → Proceed เมื่อเตือน cert **');
+      printQr(`https://${ip}:${HTTPS_PORT}`);
+      console.log('='.repeat(56));
+    });
+  } catch (e) {
+    console.log('  (รัน npm install เพื่อเปิด HTTPS สำหรับมือถือ)');
+    console.log('='.repeat(56));
+  }
 }
