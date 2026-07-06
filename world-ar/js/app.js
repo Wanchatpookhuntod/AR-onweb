@@ -26,6 +26,8 @@ const VFX_TINT = {
   lotus: [255, 155, 210], sacred: [255, 250, 220], battle: [255, 85, 30],
 };
 const AIM_DEG = 22, UNLOCK_M = 200;
+const VIEW_M = 1000;    // ระยะการมองเห็น spot (1 กม) — เกินระยะนี้ไม่แสดง/เล็ง/effect
+const RADIUS_M = 300;   // รัศมีของสถานที่ — อยู่ในระยะนี้ถือว่า "อยู่ในสถานที่นั้น"
 
 // โหลดสถานที่จากไฟล์ JSON แล้ว map เป็นรูปแบบที่แอปใช้
 const spotsReady = fetch('assets/src/location.json')
@@ -46,6 +48,7 @@ const spotsReady = fetch('assets/src/location.json')
 // ═══ STATE ═══
 let userLat = null, userLng = null, rawH = 0, smoothH = 0;
 let aimedSpot = null, activeVFX = null, vfxFade = 0;
+let insideSpotId = null;   // id ของสถานที่ที่ผู้ใช้ "อยู่ใน" รัศมี (RADIUS_M) — ถ้ามี จะแสดงเฉพาะที่นั่น
 let unlocked = loadUnlocked(), toastTimer = null, T = 0;
 let ps = [], ss = [], sparks = [];   // sparks = สะเก็ดไฟ (ใช้เฉพาะ vfxShrine)
 let auraStars = [];                   // ดาวประกายของเลเยอร์แสงศักดิ์สิทธิ์ (grandAura)
@@ -408,10 +411,12 @@ function drawCompass() {
     // คำนวณตำแหน่ง spot ที่มองเห็น แล้วเรียงซ้าย→ขวา
     const vis = [];
     SPOTS.forEach(s => {
+      if (insideSpotId && s.id !== insideSpotId) return;   // อยู่ในสถานที่ → ไม่แสดงที่อื่น
+      const dist = hav(userLat, userLng, s.lat, s.lng);
+      if (dist > VIEW_M) return;                            // เกินระยะมองเห็น 1km → ไม่แสดง
       const b = bear(userLat, userLng, s.lat, s.lng);
       const px = W / 2 + adiff(smoothH, b) * SP;
       if (px < 8 || px > W - 8) return;
-      const dist = hav(userLat, userLng, s.lat, s.lng);
       vis.push({ s, px, dist, isHot: aimedSpot === s.id });
     });
     vis.sort((a, b) => a.px - b.px);
@@ -551,9 +556,22 @@ function drawCalIntroCompass() {
 function checkAim() {
   if (!userLat) return;
 
-  // สปอตที่กำลังเล็ง (อยู่ในมุม AIM_DEG)
+  // สถานที่ที่ผู้ใช้ "อยู่ใน" — สปอตที่ใกล้สุดและอยู่ในรัศมี RADIUS_M (300m)
+  // ถ้ามี: จะแสดงเฉพาะที่นั่น ไม่แสดง effect/การมองเห็นของที่อื่นเลย
+  let insideSpot = null, insideDist = RADIUS_M;
+  SPOTS.forEach(s => {
+    const dist = hav(userLat, userLng, s.lat, s.lng);
+    if (dist < insideDist) { insideDist = dist; insideSpot = s; }
+  });
+  insideSpotId = insideSpot ? insideSpot.id : null;
+
+  // สปอตที่กำลังเล็ง (อยู่ในมุม AIM_DEG + ในระยะมองเห็น VIEW_M เท่านั้น)
+  // ถ้าอยู่ในสถานที่แล้ว — เล็งได้เฉพาะสถานที่นั้น
   let found = null, minD = AIM_DEG;
   SPOTS.forEach(s => {
+    if (insideSpot && s.id !== insideSpot.id) return;   // อยู่ในสถานที่: ที่อื่นไม่แสดง
+    const dist = hav(userLat, userLng, s.lat, s.lng);
+    if (dist > VIEW_M) return;                          // เกินระยะมองเห็น 1km
     const b = bear(userLat, userLng, s.lat, s.lng);
     const d = Math.abs(adiff(smoothH, b));
     if (d < minD) { minD = d; found = s; }
@@ -570,10 +588,13 @@ function checkAim() {
   }
 
   // สปอตที่จะแสดง VFX:
-  //  1) สปอตที่กำลังเล็ง  หรือ
-  //  2) ถ้าไม่ได้เล็ง — สปอตที่ปลดล็อคแล้วและอยู่ในระยะ (ใกล้สุด)
+  //  1) อยู่ในสถานที่ → แสดงของสถานที่นั้นเสมอ (ทับที่อื่นทั้งหมด)
+  //  2) กำลังเล็งสปอต (ในระยะมองเห็น)  หรือ
+  //  3) ไม่ได้เล็ง — สปอตที่ปลดล็อคแล้วและอยู่ในระยะ (ใกล้สุด)
   let active = found;
-  if (!active) {
+  if (insideSpot) {
+    active = insideSpot;
+  } else if (!active) {
     let bestD = UNLOCK_M;
     SPOTS.forEach(s => {
       if (!unlocked[s.id]) return;
