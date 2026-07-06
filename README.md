@@ -51,7 +51,7 @@ ngrok http 5000
 ├── templates/
 │   ├── menu.html           # เมนูหลัก (/)
 │   └── mv.html             # หน้า AR (/ar — model-viewer)
-├── taksin/                 # หน้า /page2 — "ตามรอยพระเจ้าตาก" World AR (GPS + เข็มทิศ)
+├── world-ar/               # หน้า /world-ar — "ตามรอยพระเจ้าตาก" World AR (GPS + เข็มทิศ)
 │   ├── index.html
 │   ├── css/  js/  assets/
 └── static/

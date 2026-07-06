@@ -215,19 +215,23 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
   display:flex;justify-content:space-between;align-items:flex-start}
 .tt{font-size:14px;letter-spacing:.15em;color:#C9A84C;text-shadow:0 0 10px rgba(201,168,76,.8)}
 .ts{font-size:9px;color:rgba(201,168,76,.3);letter-spacing:.2em;margin-top:2px}
+
 #gps-dot{width:7px;height:7px;border-radius:50%;background:#C9A84C;
   box-shadow:0 0 5px #C9A84C;animation:blink 1.2s infinite;display:inline-block}
+
 #gps-txt{font-size:9px;color:rgba(201,168,76,.45);letter-spacing:.08em;vertical-align:middle;margin-left:5px}
+
 #coord-txt{font-size:9px;color:rgba(201,168,76,.28);margin-top:3px;text-align:right}
 
 /* compass strip */
-#cmp-wrap{position:absolute;top:72px;left:50%;transform:translateX(-50%);width:300px;height:56px}
-#cmp-cv{position:absolute;top:0;left:0;width:300px;height:56px}
-#cmp-line{position:absolute;bottom:0;left:50%;transform:translateX(-50%);
-  width:2px;height:22px;background:#C9A84C;box-shadow:0 0 6px #C9A84C}
+#cmp-wrap{position:absolute;top:72px;left:50%;transform:translateX(-50%);width:360px;max-width:92vw;height:72px}
+#cmp-cv{position:absolute;top:0;left:0;width:100%;height:72px;border-radius:16px}
+#cmp-line{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;
+  border-bottom:13px solid #C9A84C;filter:drop-shadow(0 0 5px #C9A84C)}
 
 /* vfx tag */
-#vfx-tag{position:absolute;top:136px;left:50%;transform:translateX(-50%);
+#vfx-tag{position:absolute;top:160px;left:50%;transform:translateX(-50%);
   background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);
   border-radius:20px;padding:4px 14px;font-size:10px;
   color:rgba(201,168,76,.5);letter-spacing:.1em;white-space:nowrap}
@@ -298,6 +302,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
   background:rgba(201,168,76,.14);box-shadow:0 0 12px rgba(201,168,76,.35)}
 .chip .cd{width:5px;height:5px;border-radius:50%;background:rgba(201,168,76,.28);transition:all .3s}
 .chip.hot .cd{background:#F0D080;box-shadow:0 0 6px #C9A84C}
+/* ปลดล็อคแล้ว — ค้างเป็นรายการ (โทนทองเข้ม + ติ๊กถูก) */
+.chip.done{border-color:rgba(201,168,76,.5);color:rgba(240,208,128,.85)}
+.chip.done .cd{background:#7CCF80;box-shadow:0 0 5px #7CCF80}
+.chip.done::after{content:"✓";margin-left:2px;font-size:10px;color:#7CCF80}
 
 /* unlock toast — royal stamp */
 #toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.85);
@@ -336,7 +344,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 }
 
 /* calibration button */
-#cal-btn{position:absolute;top:136px;right:16px;
+#cal-btn{position:absolute;top:160px;right:16px;
   background:rgba(4,2,1,.75);border:1px solid rgba(201,168,76,.25);border-radius:20px;
   color:rgba(201,168,76,.55);font-size:10px;letter-spacing:.08em;
   padding:5px 12px;cursor:pointer;pointer-events:auto;transition:all .3s;font-family:sans-serif}

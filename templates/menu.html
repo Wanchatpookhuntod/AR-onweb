@@ -4,66 +4,214 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Web AR — เมนูหลัก</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f); color: #fff; }
-    .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 26px; padding: 24px; text-align: center; }
-    h1 { font-size: 24px; font-weight: 700; }
-    .sub { font-size: 14px; opacity: .7; max-width: 340px; line-height: 1.5; }
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(201,168,76,.10), transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(122,94,30,.18), transparent 70%),
+        #050301;
+      color: #F0D080; }
+    .wrap { position: relative; min-height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 26px; padding: 24px; text-align: center;
+      overflow: hidden; }
+    /* keep all content above the portrait layer */
+    .wrap > *:not(.portrait-bg) { position: relative; z-index: 1; }
+
+    /* enlarged portrait sitting behind the text, fading from bottom (solid) up to top (transparent) */
+    .portrait-bg {
+      position: absolute;
+      top: -4%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(118vw, 560px);
+      max-width: none;
+      height: auto;
+      z-index: 0;
+      pointer-events: none;
+      opacity: .85;
+      filter: drop-shadow(0 0 40px rgba(201,168,76,.35));
+      -webkit-mask-image: linear-gradient(to top, #000 0%, #000 30%, rgba(0,0,0,.35) 65%, transparent 90%);
+      mask-image: linear-gradient(to top, #000 0%, #000 30%, rgba(0,0,0,.35) 65%, transparent 90%);
+    }
+
+    /* ambient floating dust/embers across the whole screen */
+    .perm-ambient{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+    .perm-ambient .amb{position:absolute;border-radius:50%;
+      background:radial-gradient(circle,rgba(247,224,160,.95),rgba(201,168,76,.35) 60%,transparent 75%);
+      will-change:transform,opacity;
+      animation:amb-float var(--dur) linear var(--delay) infinite}
+    @keyframes amb-float{
+      0%{transform:translate(0,0);opacity:0}
+      25%{opacity:var(--op1)}
+      35%{transform:translate(var(--dx),calc(var(--dy)*.32))}
+      65%{transform:translate(calc(var(--dx)*-1),calc(var(--dy)*.66))}
+      75%{opacity:var(--op1)}
+      100%{transform:translate(0,var(--dy));opacity:0}}
+
+    /* ornate corner marks */
+    .perm-corner{position:fixed;width:42px;height:42px;
+      border:1.5px solid rgba(201,168,76,.45);pointer-events:none;z-index:5}
+    .perm-corner.tl{top:22px;left:22px;border-right:none;border-bottom:none}
+    .perm-corner.tr{top:22px;right:22px;border-left:none;border-bottom:none}
+    .perm-corner.bl{bottom:22px;left:22px;border-right:none;border-top:none}
+    .perm-corner.br{bottom:22px;right:22px;border-left:none;border-top:none}
+    .perm-corner::after{content:"";position:absolute;width:6px;height:6px;
+      border-radius:50%;background:#F0D080;box-shadow:0 0 8px #C9A84C}
+    .perm-corner.tl::after{top:-4px;left:-4px}
+    .perm-corner.tr::after{top:-4px;right:-4px}
+    .perm-corner.bl::after{bottom:-4px;left:-4px}
+    .perm-corner.br::after{bottom:-4px;right:-4px}
+
+    /* radiant aura glowing out from the title */
+    .title-block{ position: relative; }
+    .title-block::before{ content:""; position:absolute; left:50%; top:48%;
+      transform:translate(-50%,-50%);
+      width:min(120vw,560px); height:min(120vw,560px);
+      z-index:-1; pointer-events:none;
+      background:radial-gradient(circle,
+        rgba(247,224,160,.16) 0%,
+        rgba(201,168,76,.09) 30%,
+        rgba(122,94,30,.05) 50%,
+        transparent 68%);
+      filter:blur(12px);
+      animation:title-halo 4.5s ease-in-out infinite; }
+    @keyframes title-halo{
+      0%,100%{ transform:translate(-50%,-50%) scale(1); opacity:.5; }
+      50%{ transform:translate(-50%,-50%) scale(1.12); opacity:.75; }}
+
+    h1 { font-size: 24px; font-weight: 600; letter-spacing: .06em; line-height: 1.5;
+      color:#F0D080;
+      /* layer 1: moving bright sweep, layer 2: base vertical gold gradient */
+      background:
+        linear-gradient(110deg,transparent 0%,transparent 43%,#FFFBEB 50%,transparent 57%,transparent 100%),
+        linear-gradient(to bottom,#FFF3C4 0%,#F0D080 45%,#c8a547 75%,#987626 100%);
+      background-size:300% 100%, 100% 100%;
+      background-repeat:no-repeat;
+      -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+      text-shadow:0 0 24px rgba(201,168,76,.5);
+      animation:title-shine 5.5s linear infinite; }
+    @keyframes title-shine{
+      0%{background-position:200% 0, 0 0}
+      45%{background-position:-100% 0, 0 0}
+      100%{background-position:-100% 0, 0 0}}
+    .title-line{ width:min(320px,72vw); height:1px; margin:16px auto 0;
+      background:linear-gradient(90deg,transparent,#C9A84C,transparent);
+      box-shadow:0 0 8px rgba(201,168,76,.6); }
+    .sub { font-size: 14px; color: rgba(201,168,76,.6); max-width: 340px; line-height: 1.5; }
     .menu { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 360px; }
     .card {
-      display: flex; align-items: center; gap: 16px; text-decoration: none; color: #fff;
-      padding: 20px 22px; border-radius: 18px; border: 1px solid rgba(255,255,255,.08);
-      background: rgba(255,255,255,.04); transition: transform .15s ease, background .15s ease;
+      position: relative;
+      display: flex; align-items: center; gap: 16px; text-decoration: none; color: #F0D080;
+      padding: 20px 22px; border-radius: 18px; border: 1px solid rgba(201,168,76,.25);
+      background: rgba(20,15,10,.4);
+      box-shadow: inset 0 0 0 1px rgba(240,208,128,.05);
+      transition: transform .15s ease, background .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
     .card:active { transform: scale(.98); }
+    .card:hover { border-color: rgba(240,208,128,.55);
+      box-shadow: 0 0 20px rgba(201,168,76,.25), inset 0 0 0 1px rgba(240,208,128,.08); }
+    .card::before, .card::after { content:""; position:absolute; width:10px; height:10px;
+      border:1px solid rgba(240,208,128,.6); }
+    .card::before{ top:-1px; left:-1px; border-right:none; border-bottom:none; }
+    .card::after{ bottom:-1px; right:-1px; border-left:none; border-top:none; }
     .card .icon {
       width: 52px; height: 52px; flex: none; border-radius: 14px;
       display: grid; place-items: center; font-size: 26px;
     }
     .card .txt { text-align: left; }
-    .card .txt .t { font-size: 17px; font-weight: 600; }
-    .card .txt .d { font-size: 12px; opacity: .6; margin-top: 2px; }
-    .card .arrow { margin-left: auto; opacity: .4; font-size: 20px; }
+    .card .txt .t { font-size: 17px; font-weight: 600; color:#F0D080;
+      text-shadow:0 0 12px rgba(201,168,76,.5); }
+    .card .txt .d { font-size: 12px; color: rgba(201,168,76,.5); margin-top: 2px; line-height: 1.4; }
+    .card .arrow { margin-left: auto; color: rgba(201,168,76,.5); font-size: 20px; }
 
-    .card.ar { background: linear-gradient(135deg, rgba(109,94,252,.22), rgba(70,177,255,.22));
-      border-color: rgba(70,177,255,.35); }
-    .card.ar .icon { background: linear-gradient(135deg, #6d5efc, #46b1ff); }
-    .card.blank .icon { background: rgba(255,255,255,.1); }
+    .card.ar { background: linear-gradient(135deg, rgba(201,168,76,.18), rgba(122,94,30,.14));
+      border-color: rgba(240,208,128,.4); }
+    .card.ar .icon { background: linear-gradient(135deg, #7A5E1E, #C9A84C); }
+    .card.blank .icon { background: rgba(201,168,76,.12); }
 
-    .foot { font-size: 12px; opacity: .45; }
+    .foot {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 10px;
+      font-size: 12px;
+      color: rgba(201,168,76,.4);
+      letter-spacing: .05em;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
+  <div class="perm-ambient" id="perm-ambient"></div>
+
   <div class="wrap">
-    <div>
-      <h1>🪐 Web AR</h1>
-      <p class="sub">เลือกเมนูที่ต้องการ</p>
+
+    <!-- <img class="portrait-bg" src="world-ar/assets/king-taksin.png" alt="พระเจ้าตากสินมหาราช"> -->
+    <div class="title-block">
+      <h1>
+        <div>
+          ลพบุรีเมืองอันเป็นที่
+        </div>
+        <div>
+          ประชุมพระบรมธาตุ
+        </div>
+        <div>พระเจ้าตากสินมหาราช</div>
+        <div>ธรรมราชา</div>
+      </h1>
+      <div class="title-line"></div>
+
+      <!-- <p class="sub">เลือกเมนูที่ต้องการ</p> -->
     </div>
 
     <nav class="menu">
-      <a class="card ar" href="/ar">
-        <div class="icon">👋</div>
+      <a class="card ar" href="/world-ar">
         <div class="txt">
-          <div class="t">เริ่ม AR</div>
-          <div class="d">พรีวิว + วางโมเดลในโลกจริง (iOS + Android)</div>
+          <div class="t">แสงพระบรมธาตุ ตามรอยพระเจ้าตาก</div>
+          <div class="d">ส่องหาสถานที่ประวัติศาสตร์ เพื่อมองเห็นแสงพระบรมธาตุ</div>
         </div>
         <div class="arrow">›</div>
       </a>
 
-      <a class="card blank" href="/page2">
-        <div class="icon">⚔️</div>
+      <a class="card ar" href="/ar">
         <div class="txt">
-          <div class="t">ตามรอยพระเจ้าตาก</div>
-          <div class="d">World AR — GPS + เข็มทิศ ส่องหาสถานที่ประวัติศาสตร์</div>
+          <div class="t">AR วัดพระศรีรัตนมหาธาตุ</div>
+          <div class="d">การจิตนาการถึงวัดพระศรีรัตนมหาธาตุที่ยังไม่ทรุดโทรม</div>
         </div>
         <div class="arrow">›</div>
       </a>
     </nav>
 
-    <p class="foot">iOS 12+ Safari / Android 8+ Chrome</p>
   </div>
+  <p class="foot">สำนักศิลปวัฒนธรรม มรภ.เทพสตรี</p>
+
+  <script>
+  // ambient floating dust/embers drifting across the whole screen (atmosphere)
+  (function(){
+    var box = document.getElementById('perm-ambient');
+    if(!box) return;
+    var N = 100;
+    for(var i=0;i<N;i++){
+      var a = document.createElement('span');
+      a.className = 'amb';
+      var size = 3 + Math.random()*4;            // 3–7px
+      a.style.width = a.style.height = size + 'px';
+      a.style.left = (Math.random()*100) + '%';
+      a.style.top = (Math.random()*100) + '%';   // scattered across the whole screen
+      var dur = 6 + Math.random()*8;             // 6–14s gentle bob
+      a.style.setProperty('--dur', dur + 's');
+      a.style.setProperty('--delay', (-Math.random()*dur) + 's');
+      // gentle upward drift with a little horizontal sway
+      a.style.setProperty('--dx', ((Math.random()*2-1)*80) + 'px');
+      a.style.setProperty('--dy', (-(120 + Math.random()*160)) + 'px');
+      a.style.setProperty('--op0', (0.05 + Math.random()*0.1).toFixed(2));
+      a.style.setProperty('--op1', (0.15 + Math.random()*0.2).toFixed(2));
+      box.appendChild(a);
+    }
+  })();
+  </script>
 </body>
 </html>

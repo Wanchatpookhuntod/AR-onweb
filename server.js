@@ -34,7 +34,7 @@ const PORT = portIdx !== -1 && argv[portIdx + 1] ? parseInt(argv[portIdx + 1], 1
 const ROOT = __dirname;
 const TEMPLATES = path.join(ROOT, 'templates');
 const STATIC = path.join(ROOT, 'static');
-const TAKSIN = path.join(ROOT, 'taksin');
+const WORLD_AR = path.join(ROOT, 'world-ar');
 
 // ---------- MIME types ----------
 const MIME = {
@@ -116,14 +116,24 @@ function handler(req, res) {
 
   // หน้า taksin: World AR "ตามรอยพระเจ้าตาก" (GPS + เข็มทิศ)
   // redirect ให้ลงท้ายด้วย / เพื่อให้ relative path (css/, js/, assets/) ใน index.html ทำงาน
-  if (url === '/page2' || url === '/page2.html') {
-    res.writeHead(302, { Location: '/page2/' });
+  if (url === '/world-ar' || url === '/world-ar.html') {
+    res.writeHead(302, { Location: '/world-ar/' });
     res.end();
     return;
   }
-  if (url.startsWith('/page2/')) {
-    const rel = url.slice('/page2/'.length) || 'index.html';
-    const filePath = safeJoin(TAKSIN, rel);
+  if (url.startsWith('/world-ar/')) {
+    const rel = url.slice('/world-ar/'.length) || 'index.html';
+    const filePath = safeJoin(WORLD_AR, rel);
+    if (!filePath) {
+      res.writeHead(403); res.end('Forbidden'); return;
+    }
+    return sendFile(res, filePath);
+  }
+
+  // Alias assets for shared UI images used by /ar page
+  if (url.startsWith('/assets/')) {
+    const assetsBase = path.join(WORLD_AR, 'assets');
+    const filePath = safeJoin(assetsBase, url.slice('/assets/'.length));
     if (!filePath) {
       res.writeHead(403); res.end('Forbidden'); return;
     }

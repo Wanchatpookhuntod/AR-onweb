@@ -7,7 +7,11 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f); color: #fff; }
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(201,168,76,.10), transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(122,94,30,.18), transparent 70%),
+        #050301;
+      color: #f2e6c3; }
 
     /* กล้องสด (พื้นหลังด่านพรีวิว) */
     #cam {
@@ -25,21 +29,61 @@
       background: transparent; --poster-color: transparent;
     }
 
+    #modelLoading {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      background: rgba(5,3,1,.25);
+    }
+    #modelLoading.show { display: flex; }
+    .ml-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(201,168,76,.3);
+      background: rgba(16,10,4,.78);
+      color: #f0d080;
+      font-size: 13px;
+      letter-spacing: .02em;
+      box-shadow: 0 0 18px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+    }
+    .ml-spin {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(240,208,128,.35);
+      border-top-color: #f0d080;
+      animation: ml-rot .8s linear infinite;
+    }
+    @keyframes ml-rot { to { transform: rotate(360deg); } }
+
     /* แถบควบคุมล่างของด่านพรีวิว */
     #pvHud {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
       display: flex; flex-direction: column; align-items: center; gap: 12px;
       padding: 18px 20px calc(22px + env(safe-area-inset-bottom));
-      background: linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0));
+      background: linear-gradient(to top, rgba(5,3,1,.82), rgba(5,3,1,0));
       text-align: center;
     }
     #pvHud p { font-size: 13px; opacity: .9;
-      background: rgba(0,0,0,.4); padding: 6px 14px; border-radius: 999px; backdrop-filter: blur(6px); }
-    #arBtn, #placeBtn {
+      background: rgba(18,12,5,.55); padding: 6px 14px; border-radius: 999px; backdrop-filter: blur(6px);
+      border: 1px solid rgba(201,168,76,.26); color: #f0d080; }
+
+    #arBtn {
       padding: 15px 34px; font-size: 17px; font-weight: 700; border: none;
       border-radius: 999px; cursor: pointer; color: #fff;
       background: linear-gradient(135deg, #6d5efc, #46b1ff);
       box-shadow: 0 8px 24px rgba(70,177,255,.45);
+    }
+    #placeBtn {
+      margin-top: -24px;
     }
     /* ใช้ปุ่มของเราเอง ซ่อนปุ่ม ar-button ของ model-viewer */
     #arBtn { display: none; }
@@ -49,41 +93,173 @@
       position: fixed; inset: 0; z-index: 10; display: flex;
       flex-direction: column; align-items: center; justify-content: center;
       gap: 18px; padding: 24px; text-align: center;
-      background: radial-gradient(circle at 50% 25%, #1b2735, #090a0f);
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(201,168,76,.10), transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(122,94,30,.18), transparent 70%),
+        #050301;
     }
     body.preview-on #launch { display: none; }
     #launch h1 { font-size: 22px; font-weight: 600; }
     .sub { font-size: 14px; opacity: .75; max-width: 340px; line-height: 1.5; }
-    #launchBtn {
-      padding: 16px 36px; font-size: 18px; font-weight: 700; border: none;
-      border-radius: 999px; cursor: pointer; color: #fff;
-      background: linear-gradient(135deg, #6d5efc, #46b1ff);
-      box-shadow: 0 8px 24px rgba(70,177,255,.45);
+    .pb { background:none; border:none; padding:0; cursor:pointer; line-height:0;
+      filter:drop-shadow(0 0 18px rgba(201,168,76,.45));
+      transition:transform .15s ease, filter .15s ease; }
+    .pb img { display:block; width:clamp(180px,55vw,260px); height:auto; pointer-events:none; }
+    .pb:hover { filter:drop-shadow(0 0 26px rgba(240,208,128,.7)); }
+    .pb:active { transform:scale(.96); }
+    #launchBtn:disabled, #placeBtn:disabled {
+      opacity: .4; cursor: not-allowed; box-shadow: none; filter: none;
     }
-    #launchBtn:disabled, #placeBtn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
     .note { font-size: 12px; opacity: .55; max-width: 340px; }
     #unsupported { display:none; color:#ffd93d; font-size:13px; max-width:320px; }
 
-    /* แถบเลือกโมเดล */
-    .mdl-bar {
-      display: flex; gap: 10px; flex-wrap: nowrap; overflow-x: auto;
-      max-width: 100%; padding: 4px 6px; -webkit-overflow-scrolling: touch;
+    /* แผงเลือกโมเดลแบบการ์ด */
+    .model-panel {
+      width: min(96vw, 1120px);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(30,22,12,.86), rgba(10,10,10,.84));
+      border: 1px solid rgba(201,168,76,.26);
+      box-shadow: 0 10px 26px rgba(0,0,0,.4), inset 0 0 0 1px rgba(240,208,128,.06);
+      padding: 12px 12px 10px;
+      backdrop-filter: blur(8px);
+    }
+    .model-panel-head {
+      display: flex;
+      position: relative;
+      align-items: center;
+      justify-content: center;
+      /* margin-bottom: 10px; */
+    }
+    .model-panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f0d080;
+      letter-spacing: .02em;
+      text-align: center;
+      width: 100%;
+      padding: 0 40px;
+    }
+    .model-panel-toggle {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid rgba(201,168,76,.24);
+      background: rgba(0,0,0,.45);
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .model-panel-body {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 2px 2px 6px;
+      -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
     }
-    .mdl-bar::-webkit-scrollbar { display: none; }
-    .mdl-chip {
-      flex: none; display: flex; align-items: center; gap: 7px;
-      padding: 9px 18px; border-radius: 999px; cursor: pointer;
-      font-size: 14px; color: #fff; white-space: nowrap;
-      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
-      backdrop-filter: blur(6px); transition: all .2s;
+    .model-panel-body::-webkit-scrollbar { display: none; }
+    .model-panel.collapsed .model-panel-body { display: none; }
+
+    .mdl-card {
+      flex: 0 0 156px;
+      border: none;
+      border-radius: 14px;
+      background: transparent;
+      color: #fff;
+      text-align: left;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 10px;
     }
-    .mdl-chip.active {
-      background: linear-gradient(135deg, rgba(109,94,252,.55), rgba(70,177,255,.55));
-      border-color: rgba(70,177,255,.9);
-      box-shadow: 0 4px 16px rgba(70,177,255,.4);
+    .mdl-thumb {
+      position: relative;
+      width: 100%;
+      height: 104px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.12);
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(201,168,76,.26), transparent 60%),
+        linear-gradient(145deg, #2e3136, #181a1d 65%, #0d0e10);
+      transition: all .2s ease;
     }
-    .mdl-chip .no-ios { font-size: 10px; opacity: .65 }
+    .mdl-thumb::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,.32), rgba(0,0,0,0) 45%);
+      pointer-events: none;
+    }
+    .mdl-thumb-mv {
+      width: 100%;
+      height: 100%;
+      --poster-color: transparent;
+      background: transparent;
+      pointer-events: none;
+    }
+    .mdl-thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+    .mdl-noimg-icon {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: rgba(255,255,255,.75);
+      text-shadow: 0 0 10px rgba(0,0,0,.45);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .mdl-thumb.no-image .mdl-thumb-img { display: none; }
+    .mdl-thumb.no-image .mdl-noimg-icon { display: flex; }
+    .mdl-name {
+      font-size: 14px;
+      font-weight: 700;
+      margin-top: 8px;
+      color: rgba(255,255,255,.92);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mdl-sub {
+      font-size: 11px;
+      margin-top: 2px;
+      color: rgba(255,255,255,.6);
+    }
+    .mdl-card.active .mdl-thumb {
+      border-color: rgba(240,208,128,.95);
+      box-shadow: 0 0 0 2px rgba(201,168,76,.32), 0 8px 20px rgba(201,168,76,.28);
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(201,168,76,.46), transparent 60%),
+        linear-gradient(145deg, #3d3220, #241d12 65%, #12100d);
+    }
+    .mdl-card.active .mdl-name { color: #f0d080; }
+
+    #launch .model-panel { margin-top: 4px; }
+    #pvHud .model-panel {
+      margin-bottom: 0;
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    @media (max-width: 640px) {
+      .model-panel-title { font-size: 18px; }
+      .mdl-card { flex-basis: 132px; }
+      .mdl-thumb { height: 90px; font-size: 38px; }
+    }
   </style>
   <!-- model-viewer (เก็บไว้ในเครื่อง รันได้แม้ CDN ล่ม) -->
   <script type="module" src="/static/model-viewer.min.js"></script>
@@ -109,20 +285,38 @@
     </model-viewer>
   </div>
 
+  <div id="modelLoading" aria-live="polite" aria-atomic="true">
+    <div class="ml-box"><span class="ml-spin" aria-hidden="true"></span>กำลังโหลดโมเดล...</div>
+  </div>
+
   <div id="pvHud" style="display:none">
-    <div class="mdl-bar" id="mdlBarPv"></div>
-    <p id="pvHint">หมุน/ซูมดูโมเดลในห้องของคุณ แล้วกดวางจริง</p>
-    <button id="placeBtn">🚀 วางจริงใน AR</button>
+    <div class="model-panel" id="mdlPanelPv">
+      <div class="model-panel-head">
+        <div class="model-panel-title">เลือกแบบจำลอง</div>
+        <button class="model-panel-toggle" type="button" data-target="mdlPanelPv" aria-label="ย่อหรือขยายรายการ">×</button>
+      </div>
+      <div class="model-panel-body" id="mdlBarPv"></div>
+    </div>
+    <!-- <p id="pvHint">หมุน/ซูมดูโมเดลในห้องของคุณ แล้วกดวางจริง</p> -->
+    <button id="placeBtn" class="pb" type="button"><img src="/assets/ar-show.png" alt="แสดง AR"></button>
   </div>
 
   <!-- STAGE 1: เปิดกล้อง -->
   <div id="launch">
-    <h1>🪐 Web AR (iOS + Android)</h1>
-    <p class="sub">เลือกโมเดล แล้วเปิดกล้องเพื่อพรีวิวในห้องของคุณก่อนวางจริงในโลกจริง</p>
-    <div class="mdl-bar" id="mdlBarLaunch"></div>
-    <button id="launchBtn" disabled>📷 เปิดกล้อง</button>
+    <h1>AR วัดพระศรีรัตนมหาธาตุ ลพบุรี</h1>
+    <p class="sub">เลือกโมเดล แล้วเปิดกล้อง</p>
+    <div class="model-panel" id="mdlPanelLaunch">
+      <div class="model-panel-head">
+        <div class="model-panel-title">เลือกแบบจำลอง</div>
+        <button class="model-panel-toggle" type="button" data-target="mdlPanelLaunch" aria-label="ย่อหรือขยายรายการ">×</button>
+      </div>
+      <div class="model-panel-body" id="mdlBarLaunch"></div>
+    </div>
+    <button id="launchBtn" class="pb" type="button" disabled>
+      <img src="/assets/open-camera-600.png" alt="เปิดกล้อง">
+    </button>
     <p id="launchInfo" class="note">กำลังโหลดโมเดล…</p>
-    <p id="unsupported">⚠️ อุปกรณ์นี้ไม่รองรับ AR — พรีวิว/หมุนดูโมเดลได้อย่างเดียว</p>
+    <p id="unsupported">อุปกรณ์นี้ไม่รองรับ AR — พรีวิว/หมุนดูโมเดลได้อย่างเดียว</p>
   </div>
 
   <script type="module">
@@ -134,38 +328,113 @@
     const pvHud      = document.getElementById('pvHud');
     const pvHint     = document.getElementById('pvHint');
     const placeBtn   = document.getElementById('placeBtn');
+    const modelLoading = document.getElementById('modelLoading');
 
     let enteredAR = false;
     let stream = null;
 
+    function setModelLoading(isLoading) {
+      if (!modelLoading) return;
+      modelLoading.classList.toggle('show', isLoading);
+    }
+
     // ---------- รายการโมเดล ----------
     let models = [], currentModel = null;
+
+    function updatePanelTitles(model) {
+      const base = 'เลือกแบบจำลอง';
+      const title = model ? `${model.name}` : base;
+      for (const el of document.querySelectorAll('.model-panel-title')) {
+        el.textContent = title;
+      }
+    }
+
+    function modelSubLabel(m) {
+      return m.usdz ? '' : 'Android เท่านั้น';
+    }
+
+    function cardImageCandidates(modelName) {
+      const base = `/static/models/thumbnail/${encodeURIComponent(modelName)}`;
+      return [`${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.webp`];
+    }
+
+    function bindCardImageFallback(imgEl, thumbEl, candidates) {
+      let idx = 0;
+      const tryNext = () => {
+        if (idx >= candidates.length) {
+          thumbEl.classList.add('no-image');
+          imgEl.removeAttribute('src');
+          return;
+        }
+        imgEl.src = candidates[idx++];
+      };
+
+      imgEl.addEventListener('load', () => {
+        thumbEl.classList.remove('no-image');
+      });
+      imgEl.addEventListener('error', tryNext);
+      tryNext();
+    }
+
+    function applyModelToViewer(m) {
+      if (!m) return;
+      placeBtn.disabled = true;
+      setModelLoading(true);
+      if (m.usdz) mv.setAttribute('ios-src', m.usdz);
+      else mv.removeAttribute('ios-src');
+      mv.alt = m.name;
+      mv.src = m.glb;
+    }
+
+    function setupPanelToggles() {
+      for (const btn of document.querySelectorAll('.model-panel-toggle')) {
+        btn.addEventListener('click', () => {
+          const panel = document.getElementById(btn.dataset.target);
+          if (!panel) return;
+          panel.classList.toggle('collapsed');
+          btn.textContent = panel.classList.contains('collapsed') ? '+' : '×';
+        });
+      }
+    }
 
     function renderChips() {
       for (const bar of [document.getElementById('mdlBarLaunch'), document.getElementById('mdlBarPv')]) {
         bar.innerHTML = '';
         for (const m of models) {
           const chip = document.createElement('button');
-          chip.className = 'mdl-chip' + (m === currentModel ? ' active' : '');
-          chip.innerHTML = `🗿 ${m.name}` + (m.usdz ? '' : ' <span class="no-ios">Android เท่านั้น</span>');
+          chip.type = 'button';
+          chip.className = 'mdl-card' + (m === currentModel ? ' active' : '');
+          chip.innerHTML = `
+            <div class="mdl-thumb">
+              <img class="mdl-thumb-img">
+              <span class="mdl-noimg-icon" aria-hidden="true">🖼️</span>
+            </div>
+          `;
+          const thumb = chip.querySelector('.mdl-thumb');
+          const img = chip.querySelector('.mdl-thumb-img');
+          bindCardImageFallback(img, thumb, cardImageCandidates(m.name));
           chip.onclick = () => selectModel(m);
           bar.appendChild(chip);
         }
       }
     }
 
+    setupPanelToggles();
+
     function selectModel(m) {
       if (m === currentModel) return;
       currentModel = m;
+      updatePanelTitles(m);
       renderChips();
-      // ปิดปุ่มไว้ก่อน จนกว่าโมเดลใหม่จะโหลดเสร็จ (event 'load' จะเปิดให้)
-      launchBtn.disabled = true;
+      if (document.body.classList.contains('preview-on')) {
+        launchInfo.textContent = 'กำลังโหลดโมเดล…';
+        applyModelToViewer(m);
+        return;
+      }
+
+      launchBtn.disabled = false;
       placeBtn.disabled = true;
-      launchInfo.textContent = 'กำลังโหลดโมเดล…';
-      if (m.usdz) mv.setAttribute('ios-src', m.usdz);
-      else mv.removeAttribute('ios-src');
-      mv.alt = m.name;
-      mv.src = m.glb;
+      launchInfo.textContent = 'พร้อมแล้ว แตะเพื่อเปิดกล้อง';
     }
 
     async function loadModelList() {
@@ -176,9 +445,14 @@
         launchInfo.textContent = 'ไม่พบโมเดลใน static/models/';
         return;
       }
-      selectModel(models[0]);
+      currentModel = models[0];
+      updatePanelTitles(currentModel);
+      renderChips();
+      launchBtn.disabled = false;
+      launchInfo.textContent = 'พร้อมแล้ว แตะเพื่อเปิดกล้อง';
     }
     loadModelList();
+    updatePanelTitles(null);
 
     // ---------- กล้องสด (ด่านพรีวิว) ----------
     async function startCamera() {
@@ -191,7 +465,7 @@
       } catch (e) {
         // เปิดกล้องไม่ได้ (ปฏิเสธสิทธิ์ ฯลฯ) -> ใช้พื้นหลังไล่สีแทน ยังพรีวิว/เข้า AR ได้
         cam.style.display = 'none';
-        pvHint.textContent = 'เปิดกล้องไม่ได้ — หมุนดูโมเดลแล้วกดวางจริงได้เลย';
+        if (pvHint) pvHint.textContent = 'เปิดกล้องไม่ได้ — หมุนดูโมเดลแล้วกดวางจริงได้เลย';
       }
     }
     function stopCamera() {
@@ -203,22 +477,29 @@
       await startCamera();
       document.body.classList.add('preview-on');
       pvHud.style.display = 'flex';
+      launchInfo.textContent = 'กำลังโหลดโมเดล…';
+      applyModelToViewer(currentModel);
     }
 
     // ---------- โหลดโมเดลเสร็จ ----------
     mv.addEventListener('load', () => {
+      setModelLoading(false);
       placeBtn.disabled = false;
       if (mv.canActivateAR) {
         launchBtn.disabled = false;
-        launchInfo.textContent = 'พร้อมแล้ว — แตะเพื่อเปิดกล้อง';
+        launchInfo.textContent = 'พร้อมแล้ว แตะเพื่อเปิดกล้อง';
       } else {
         // ไม่รองรับ AR: ยังให้พรีวิว/หมุนดูได้ แต่ซ่อนปุ่มวางจริง
         document.getElementById('unsupported').style.display = 'block';
         launchBtn.disabled = false;
-        launchBtn.textContent = '📷 พรีวิวโมเดล';
         launchInfo.textContent = '';
         placeBtn.style.display = 'none';
       }
+    });
+
+    mv.addEventListener('error', () => {
+      setModelLoading(false);
+      launchInfo.textContent = 'โหลดโมเดลไม่สำเร็จ';
     });
 
     // STAGE 1 -> ด่านพรีวิว
