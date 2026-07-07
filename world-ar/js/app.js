@@ -28,6 +28,9 @@ const VFX_TINT = {
 const AIM_DEG = 22, UNLOCK_M = 200;
 const VIEW_M = 1000;    // ระยะการมองเห็น spot (1 กม) — เกินระยะนี้ไม่แสดง/เล็ง/effect
 const RADIUS_M = 300;   // รัศมีของสถานที่ — อยู่ในระยะนี้ถือว่า "อยู่ในสถานที่นั้น"
+const ROAM_CYCLE_SECS = 9;  // ปลดล็อคครบ 7 → หมุนเวียน VFX ของทั้ง 7 ทุก ~9 วิ (roaming reward)
+const REVEAL_DELAY_MS = 10000;  // หลังปลดล็อคสถานที่สุดท้าย → รอ 10 วิ ก่อนขึ้นป้ายฉลอง
+const REVEAL_POPUP_MS = 7000;   // ป้ายฉลองแสดง ~7 วิ แล้วสถานะ unlock (effect ตลอด) จึงเริ่ม
 
 // โหลดสถานที่จากไฟล์ JSON แล้ว map เป็นรูปแบบที่แอปใช้
 const spotsReady = fetch('assets/src/location.json')
@@ -50,6 +53,9 @@ let userLat = null, userLng = null, rawH = 0, smoothH = 0;
 let aimedSpot = null, activeVFX = null, vfxFade = 0;
 let insideSpotId = null;   // id ของสถานที่ที่ผู้ใช้ "อยู่ใน" รัศมี (RADIUS_M) — ถ้ามี จะแสดงเฉพาะที่นั่น
 let unlocked = loadUnlocked(), toastTimer = null, T = 0;
+// สถานะ reveal ป้ายฉลอง "ครบทั้ง 7" — เก็บเวลาที่ปลดล็อคครบไว้ กันรีเซ็ตตอนรีโหลด
+let allUnlockedAt = parseInt(localStorage.getItem('allUnlockedAt') || '0', 10) || null;
+let revealPopupShown = localStorage.getItem('revealPopupShown') === '1';
 let ps = [], ss = [], sparks = [];   // sparks = สะเก็ดไฟ (ใช้เฉพาะ vfxShrine)
 let auraStars = [];                   // ดาวประกายของเลเยอร์แสงศักดิ์สิทธิ์ (grandAura)
 let headingOffset = parseInt(localStorage.getItem('headingOffset') || '0', 10);
@@ -67,6 +73,10 @@ function loadUnlocked() {
 function saveUnlocked() {
   try { localStorage.setItem('unlockedSpots', JSON.stringify(unlocked)); }
   catch (e) {}
+}
+// ปลดล็อคครบทุกสถานที่หรือยัง (ครบ 7 พระบรมธาตุ)
+function allSpotsUnlocked() {
+  return SPOTS.length > 0 && SPOTS.every(s => unlocked[s.id]);
 }
 
 // ═══ CANVAS ═══
@@ -603,6 +613,31 @@ function checkAim() {
     });
   }
 
+  // ── ปลดล็อคครบทั้ง 7 พระบรมธาตุ: หน่วง 30 วิ → ป้ายฉลอง 7 วิ → สถานะ unlock จึงแสดง ──
+  if (allSpotsUnlocked() && !allUnlockedAt) {
+    allUnlockedAt = Date.now();
+    try { localStorage.setItem('allUnlockedAt', allUnlockedAt); } catch (e) {}
+  }
+  let revealDone = false;
+  if (allUnlockedAt) {
+    const el = Date.now() - allUnlockedAt;
+    if (el >= REVEAL_DELAY_MS && !revealPopupShown) {       // ครบ 30 วิ → ขึ้นป้ายฉลอง
+      revealPopupShown = true;
+      try { localStorage.setItem('revealPopupShown', '1'); } catch (e) {}
+      showRevealPopup();
+    }
+    revealDone = el >= REVEAL_DELAY_MS + REVEAL_POPUP_MS;    // หลังป้าย 7 วิ → effect แสดงตลอด
+  }
+
+  // 4) เมื่อ revealDone → effect แสดงตลอด ไม่ว่าอยู่ที่ไหน
+  //    หมุนเวียนโชว์ VFX ของทั้ง 7 สถานที่ทีละอัน (เฉพาะตอนไม่ได้อยู่ใน/เล็ง/ใกล้สปอตใด)
+  let roaming = false;
+  if (!active && revealDone) {
+    const cvfx = VFX_CYCLE[Math.floor(T / ROAM_CYCLE_SECS) % VFX_CYCLE.length];
+    active = SPOTS.find(s => s.vfx === cvfx) || null;
+    roaming = !!active;
+  }
+
   const aimEl = document.getElementById('aim');
   const pop = document.getElementById('popup');
   // เป้าเล็ง + ป้ายกลางจอ แสดงเฉพาะตอนเล็งสปอตที่ "ยังไม่ปลดล็อค"
@@ -611,7 +646,28 @@ function checkAim() {
   aimEl.classList.toggle('hot', showAim);
   pop.classList.toggle('show', showAim);
 
-  if (active) {
+  if (roaming) {
+    // โหมดครบ 7 — fade ตัวเดิมออกก่อนแล้วค่อยสลับ VFX ถัดไป ให้เปลี่ยนลื่นไม่กระตุก
+    const changing = activeVFX && activeVFX !== active.vfx;
+    const dispVfx = changing ? activeVFX : active.vfx;             // ระหว่าง fade ยังโชว์ตัวเดิม
+    const dispSpot = SPOTS.find(s => s.vfx === dispVfx) || active;
+    aimedSpot = dispSpot.id;
+    const popImg = document.querySelector('#pop-icon img');
+    if (popImg && popImg.getAttribute('src') !== dispSpot.icon) popImg.src = dispSpot.icon;
+    document.getElementById('pop-name').textContent = dispSpot.name;
+    document.getElementById('pop-dist').textContent = '✦ ครบทั้ง ๗';
+    document.getElementById('b-name').textContent = dispSpot.name;
+    document.getElementById('b-desc').textContent = dispSpot.desc;
+    document.getElementById('vfx-tag').textContent = VFX_LABELS[dispVfx] || '';
+
+    if (changing) {
+      vfxFade = Math.max(0, vfxFade - .04);
+      if (vfxFade <= 0.02) { activeVFX = active.vfx; spawnParticles(); }
+    } else {
+      activeVFX = active.vfx;
+      vfxFade = Math.min(1, vfxFade + .04);
+    }
+  } else if (active) {
     aimedSpot = active.id;
     const dist = hav(userLat, userLng, active.lat, active.lng);
     const popImg = document.querySelector('#pop-icon img');
@@ -1138,6 +1194,16 @@ function showToast(icon, title, sub) {
   const el = document.getElementById('toast');
   el.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ═══ REVEAL POPUP ═══ (ป้ายฉลองปลดล็อคครบทั้ง 7 — แสดง ~7 วิ แล้วซ่อน)
+let revealTimer = null;
+function showRevealPopup() {
+  const el = document.getElementById('reveal');
+  if (!el) return;
+  el.classList.add('show');
+  clearTimeout(revealTimer);
+  revealTimer = setTimeout(() => el.classList.remove('show'), REVEAL_POPUP_MS);
 }
 
 // ═══ PHOTO CAPTURE ═══ (รวมภาพกล้อง + ชั้น VFX + ลายน้ำ)
