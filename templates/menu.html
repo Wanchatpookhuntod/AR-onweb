@@ -52,6 +52,52 @@
       75%{opacity:var(--op1)}
       100%{transform:translate(0,var(--dy));opacity:0}}
 
+    /* ── glow FX กลางจอ: แสงพระบรมธาตุ (aura + light หมุน + particles พุ่งออก) ── */
+    .menu-fx{--stack:min(86vw,60vh,520px);
+      position:fixed;top:29%;left:50%;transform:translate(-50%,-50%);
+      width:var(--stack);height:var(--stack);
+      z-index:0;pointer-events:none;opacity:.70}
+    .pi-aura{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      width:calc(var(--stack)*.85);height:calc(var(--stack)*.85);
+      z-index:0;pointer-events:none;mix-blend-mode:screen;
+      background:radial-gradient(ellipse at 50% 50%,
+        rgba(247,200,130,.5),rgba(214,140,58,.22) 38%,rgba(140,80,24,.09) 62%,transparent 75%);
+      filter:blur(24px);animation:pi-aura-pulse 9s linear infinite}
+    @keyframes pi-aura-pulse{
+      0%{opacity:.6;transform:translate(-50%,-50%) rotate(0deg) scale(1)}
+      50%{opacity:1;transform:translate(-50%,-50%) rotate(180deg) scale(1.08)}
+      100%{opacity:.6;transform:translate(-50%,-50%) rotate(360deg) scale(1)}}
+    .pi-fx{position:absolute;top:50%;left:50%;
+      width:var(--stack);height:auto;z-index:1;mix-blend-mode:screen;pointer-events:none;
+      animation:pi-fx-spin 40s linear infinite, pi-fx-flicker 7s ease-in-out infinite}
+    @keyframes pi-fx-spin{
+      from{transform:translate(-50%,-50%) rotate(0deg)}
+      to{transform:translate(-50%,-50%) rotate(360deg)}}
+    @keyframes pi-fx-flicker{
+      0%{opacity:.9;filter:brightness(1) saturate(1.05) hue-rotate(-4deg)}
+      22%{opacity:1;filter:brightness(1.18) saturate(1.05) hue-rotate(-4deg)}
+      40%{opacity:.84;filter:brightness(.96) saturate(1.05) hue-rotate(-4deg)}
+      55%{opacity:.97;filter:brightness(1.1) saturate(1.05) hue-rotate(-4deg)}
+      70%{opacity:.88;filter:brightness(1.02) saturate(1.05) hue-rotate(-4deg)}
+      85%{opacity:1;filter:brightness(1.2) saturate(1.05) hue-rotate(-4deg)}
+      100%{opacity:.9;filter:brightness(1) saturate(1.05) hue-rotate(-4deg)}}
+    .pi-particles{position:absolute;top:50%;left:50%;width:0;height:0;
+      z-index:1;pointer-events:none;mix-blend-mode:screen}
+    .pi-particles .p{position:absolute;top:0;left:0;border-radius:50%;
+      background:radial-gradient(circle,#FBDD9E,#D68C3A 55%,transparent 75%);
+      box-shadow:0 0 6px rgba(240,170,90,.8);
+      opacity:0;will-change:transform,opacity;
+      animation:pi-particle var(--dur) ease-out var(--delay) infinite}
+    .pi-particles .tail{position:absolute;left:50%;top:50%;
+      width:2px;height:var(--tail,40px);transform:translateX(-50%);
+      background:linear-gradient(to bottom,rgba(250,205,140,.85),rgba(214,140,58,.25) 45%,transparent);
+      border-radius:2px;filter:blur(.5px)}
+    @keyframes pi-particle{
+      0%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.3)}
+      10%{opacity:1}
+      88%{opacity:1}
+      100%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--dist) * -1)) scale(1)}}
+
     /* ornate corner marks */
     .perm-corner{position:fixed;width:42px;height:42px;
       border:1.5px solid rgba(201,168,76,.45);pointer-events:none;z-index:5}
@@ -148,6 +194,12 @@
 <body>
   <div class="perm-ambient" id="perm-ambient"></div>
 
+  <div class="menu-fx" aria-hidden="true">
+    <div class="pi-aura"></div>
+    <img class="pi-fx" src="/assets/effect-light-1-600.png" alt="">
+    <div class="pi-particles" id="pi-particles"></div>
+  </div>
+
   <div class="wrap">
 
     <!-- <img class="portrait-bg" src="world-ar/assets/king-taksin.png" alt="พระเจ้าตากสินมหาราช"> -->
@@ -211,6 +263,54 @@
       a.style.setProperty('--op1', (0.15 + Math.random()*0.2).toFixed(2));
       box.appendChild(a);
     }
+  })();
+
+  // radial particles emitting from the glow center (แสงพระบรมธาตุ)
+  (function(){
+    var box = document.getElementById('pi-particles');
+    if(!box) return;
+    var N = 160;
+    var FADE_AT = 300;          // px – tail must be fully gone by this radius
+    var FADE_SPAN = 250;        // px – distance over which the tail fades to 0
+    var kfNeeded = {};          // unique keyframes actually used
+    for(var i=0;i<N;i++){
+      var p = document.createElement('span');
+      p.className = 'p';
+      var size = 3 + Math.random()*4;            // 3–7px
+      p.style.width = p.style.height = size + 'px';
+      p.style.marginLeft = (-size/2) + 'px';
+      p.style.marginTop = (-size/2) + 'px';
+      var dist = 200 + Math.random()*800;          // 200–1000px
+      var speed = 24 + Math.random()*10;           // px/s
+      var dur = dist / speed;                       // longer travel = longer life
+      var delay = -Math.random()*dur;
+      p.style.setProperty('--a', (Math.random()*360) + 'deg');
+      p.style.setProperty('--dist', dist + 'px');
+      p.style.setProperty('--tail', (30 + Math.random()*40) + 'px');
+      p.style.setProperty('--dur', dur + 's');
+      p.style.setProperty('--delay', delay + 's');
+
+      var tail = document.createElement('i');
+      tail.className = 'tail';
+      if(dist > FADE_AT){
+        var fs = Math.max(0, Math.round((FADE_AT - FADE_SPAN)/dist*100));
+        var fe = Math.round(FADE_AT/dist*100);
+        if(fe <= fs) fs = fe - 1;
+        var key = fs + '_' + fe;
+        kfNeeded[key] = true;
+        tail.style.animation = 'pi-tailfade'+key+' '+dur+'s linear '+delay+'s infinite';
+      }
+      p.appendChild(tail);
+      box.appendChild(p);
+    }
+    var css = '';
+    for(var k in kfNeeded){
+      var parts = k.split('_');     // [fadeStart%, fadeEnd%]
+      css += '@keyframes pi-tailfade'+k+'{0%,'+parts[0]+'%{opacity:1}'+parts[1]+'%{opacity:0}100%{opacity:0}}';
+    }
+    var st = document.createElement('style');
+    st.textContent = css;
+    document.head.appendChild(st);
   })();
   </script>
 </body>

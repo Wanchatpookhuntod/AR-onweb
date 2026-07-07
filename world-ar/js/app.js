@@ -159,7 +159,7 @@ async function startApp() {
     startCompass();
     buildChips();
     loop();
-    showToast('⚔️', 'World AR พร้อมแล้ว', 'หันกล้องหา spot');
+    showToast('World AR พร้อมแล้ว', 'หันกล้องหา spot');
   } catch (e) {
     const errEl = document.getElementById('perr');
     let msg = '';
