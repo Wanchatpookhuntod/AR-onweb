@@ -169,8 +169,8 @@ async function startApp() {
     startCompass();
     buildChips();
     loop();
-    showToast('World AR พร้อมแล้ว', 'หันกล้องหา spot');
-  } catch (e) {
+    showToast('🧭', 'World AR พร้อมแล้ว', 'หันกล้องหา spot');
+แบบ  } catch (e) {
     const errEl = document.getElementById('perr');
     let msg = '';
     if (e.name === 'NotAllowedError') msg = '❌ กรุณาอนุญาตการเข้าถึงกล้อง';
@@ -233,7 +233,7 @@ function startARAfterCal() {
   if (hud) hud.style.display = 'block';
   buildChips();
   loop();
-  showToast('⚔️', 'World AR พร้อมแล้ว', 'หันกล้องหา spot');
+  showToast('🧭', 'World AR พร้อมแล้ว', 'หันกล้องหา spot');
 }
 
 // ═══ GPS ═══

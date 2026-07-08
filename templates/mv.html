@@ -64,6 +64,30 @@
     }
     @keyframes ml-rot { to { transform: rotate(360deg); } }
 
+    /* แถบเตือน in-app browser (เฉพาะ iOS) → แนะนำเปิดใน Safari */
+    #iabWarn { position: fixed; top: 0; left: 0; right: 0; z-index: 30; display: none;
+      padding: calc(8px + env(safe-area-inset-top)) 12px 8px; }
+    #iabWarn.show { display: block; }
+    .iab-box { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 14px;
+      background: rgba(16,10,4,.94); border: 1px solid rgba(201,168,76,.4);
+      box-shadow: 0 8px 24px rgba(0,0,0,.5); backdrop-filter: blur(8px); }
+    .iab-txt { flex: 1; font-size: 13px; line-height: 1.4; color: #f0d080; }
+    .iab-txt b { color: #fff; }
+    .iab-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+    #iabCopy { padding: 8px 12px; border-radius: 999px; border: none; cursor: pointer;
+      font-size: 12px; font-weight: 700; white-space: nowrap; color: #050301;
+      background: linear-gradient(135deg, #f0d080, #c9a84c); }
+    #iabClose { width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      font-size: 18px; line-height: 1; color: #f0d080;
+      background: rgba(0,0,0,.4); border: 1px solid rgba(201,168,76,.3); }
+
+    /* ตัวแจ้ง "กำลังเตรียม AR…" ตอนกดวางจริง (Quick Look อาจโหลดช้า) */
+    #arPrep { position: fixed; inset: 0; z-index: 12; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(5,3,1,.55); pointer-events: none; }
+    #arPrep.show { display: flex; }
+
     /* แถบควบคุมล่างของด่านพรีวิว */
     #pvHud {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
@@ -265,6 +289,17 @@
   <script type="module" src="/static/model-viewer.min.js"></script>
 </head>
 <body>
+  <!-- แถบเตือน in-app browser (เฉพาะ iOS) → แนะนำเปิดใน Safari -->
+  <div id="iabWarn">
+    <div class="iab-box">
+      <div class="iab-txt">เพื่อเข้า AR ได้สมบูรณ์ ควรเปิดหน้านี้ใน <b>Safari</b></div>
+      <div class="iab-actions">
+        <button id="iabCopy" type="button">คัดลอกลิงก์</button>
+        <button id="iabClose" type="button" aria-label="ปิด">×</button>
+      </div>
+    </div>
+  </div>
+
   <!-- พื้นหลัง: กล้องสด -->
   <video id="cam" autoplay playsinline muted></video>
 
@@ -287,6 +322,10 @@
 
   <div id="modelLoading" aria-live="polite" aria-atomic="true">
     <div class="ml-box"><span class="ml-spin" aria-hidden="true"></span>กำลังโหลดโมเดล...</div>
+  </div>
+
+  <div id="arPrep" aria-live="polite" aria-atomic="true">
+    <div class="ml-box"><span class="ml-spin" aria-hidden="true"></span>กำลังเตรียม AR…</div>
   </div>
 
   <div id="pvHud" style="display:none">
@@ -330,12 +369,54 @@
     const placeBtn   = document.getElementById('placeBtn');
     const modelLoading = document.getElementById('modelLoading');
 
+    const arPrep     = document.getElementById('arPrep');
+    const iabWarn    = document.getElementById('iabWarn');
+
     let enteredAR = false;
     let stream = null;
 
     function setModelLoading(isLoading) {
       if (!modelLoading) return;
       modelLoading.classList.toggle('show', isLoading);
+    }
+    function setArPrep(on) { if (arPrep) arPrep.classList.toggle('show', on); }
+
+    // ---------- ตรวจแพลตฟอร์ม / in-app browser ----------
+    const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // in-app browser ยอดฮิตที่ Quick Look มักเปิดไม่ได้ (LINE/FB/IG/Messenger ฯลฯ)
+    function isInAppBrowser() {
+      return /(FBAN|FBAV|FBIOS|FB_IAB|Instagram|Line\/|Messenger|MicroMessenger|Twitter|TikTok|musical_ly|BytedanceWebview)/i.test(navigator.userAgent || '');
+    }
+
+    // แสดงแถบแนะนำเปิดใน Safari — เฉพาะ iOS ที่อยู่ใน in-app browser (Android ไม่แตะ)
+    if (isIOS && isInAppBrowser() && iabWarn) {
+      iabWarn.classList.add('show');
+      const iabCopy = document.getElementById('iabCopy');
+      const iabClose = document.getElementById('iabClose');
+      iabCopy.addEventListener('click', async () => {
+        const url = location.href;
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch (e) {
+          const t = document.createElement('textarea');
+          t.value = url; t.style.position = 'fixed'; t.style.opacity = '0';
+          document.body.appendChild(t); t.focus(); t.select();
+          try { document.execCommand('copy'); } catch (_) {}
+          t.remove();
+        }
+        iabCopy.textContent = 'คัดลอกแล้ว ✓';
+        setTimeout(() => { iabCopy.textContent = 'คัดลอกลิงก์'; }, 2000);
+      });
+      iabClose.addEventListener('click', () => iabWarn.classList.remove('show'));
+    }
+
+    // พรีโหลด usdz ล่วงหน้า (warm cache) ให้ Quick Look เปิดไวขึ้น — เฉพาะ iOS
+    const usdzPrefetched = new Set();
+    function prefetchUSDZ(url) {
+      if (!url || usdzPrefetched.has(url)) return;
+      usdzPrefetched.add(url);
+      fetch(url, { cache: 'force-cache' }).catch(() => {});
     }
 
     // ---------- รายการโมเดล ----------
@@ -380,7 +461,7 @@
       if (!m) return;
       placeBtn.disabled = true;
       setModelLoading(true);
-      if (m.usdz) mv.setAttribute('ios-src', m.usdz);
+      if (m.usdz) { mv.setAttribute('ios-src', m.usdz); if (isIOS) prefetchUSDZ(m.usdz); }
       else mv.removeAttribute('ios-src');
       mv.alt = m.name;
       mv.src = m.glb;
@@ -505,25 +586,53 @@
     // STAGE 1 -> ด่านพรีวิว
     launchBtn.addEventListener('click', enterPreview);
 
-    // ปุ่มวางจริง -> ปิดกล้องเราแล้วเข้า AR ของ OS
+    // ปุ่มวางจริง -> ซ่อนปุ่มทันที + แจ้ง "กำลังเตรียม AR…" แล้วเข้า AR ของ OS
     placeBtn.addEventListener('click', async () => {
+      placeBtn.style.display = 'none';   // ซ่อนปุ่มทันทีเมื่อกด
+      setArPrep(true);                    // Quick Look อาจโหลดช้า → แจ้งผู้ใช้
       stopCamera();
       try {
         await mv.activateAR();
+        // ส่งต่อให้ Quick Look/Scene Viewer แล้ว — ซ่อน spinner หลังหน่วงเล็กน้อย
+        setTimeout(() => setArPrep(false), 800);
+        // safety: ถ้า AR ไม่ทำงานจริง (เช่น in-app browser) และยังอยู่หน้าเดิม → คืนปุ่ม
+        setTimeout(() => {
+          if (!enteredAR && document.visibilityState === 'visible' && document.hasFocus()) {
+            restoreAfterAR();
+          }
+        }, 2500);
       } catch (e) {
-        // เข้า AR ไม่สำเร็จ -> เปิดกล้องพรีวิวกลับ
+        // เข้า AR ไม่สำเร็จ -> คืนปุ่ม + เปิดกล้องพรีวิวกลับ
+        setArPrep(false);
+        placeBtn.style.display = '';
         startCamera();
       }
     });
 
-    // ติดตามสถานะ AR: ออกจาก AR แล้วกลับมาด่านพรีวิว (เปิดกล้องใหม่)
+    // คืนปุ่มวาง AR + ปิด spinner เมื่อกลับมาที่หน้า (ปิด Quick Look บน iOS)
+    function restoreAfterAR() {
+      if (!document.body.classList.contains('preview-on')) return;
+      if (placeBtn.style.display !== 'none') return;
+      setArPrep(false);
+      placeBtn.style.display = '';
+      if (!stream) startCamera();
+    }
+    window.addEventListener('focus', restoreAfterAR);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') restoreAfterAR();
+    });
+
+    // ติดตามสถานะ AR (webxr/scene-viewer): ออกจาก AR แล้วกลับมาด่านพรีวิว
     mv.addEventListener('ar-status', (e) => {
       const status = e.detail.status;
       if (status === 'session-started') {
         enteredAR = true;
+        setArPrep(false);
       } else if (status === 'not-presenting' && enteredAR) {
         enteredAR = false;
-        startCamera();          // กลับมาด่านพรีวิว
+        setArPrep(false);
+        placeBtn.style.display = '';   // คืนปุ่มเมื่อออกจาก AR
+        startCamera();                 // กลับมาด่านพรีวิว
       }
     });
   </script>
