@@ -170,7 +170,7 @@ async function startApp() {
     buildChips();
     loop();
     showToast('🧭', 'World AR พร้อมแล้ว', 'หันกล้องหา spot');
-แบบ  } catch (e) {
+  } catch (e) {
     const errEl = document.getElementById('perr');
     let msg = '';
     if (e.name === 'NotAllowedError') msg = '❌ กรุณาอนุญาตการเข้าถึงกล้อง';
