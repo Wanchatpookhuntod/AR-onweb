@@ -53,10 +53,13 @@
       100%{transform:translate(0,var(--dy));opacity:0}}
 
     /* ── glow FX กลางจอ: แสงพระบรมธาตุ (aura + light หมุน + particles พุ่งออก) ── */
+    /* position:fixed สร้าง stacking context เสมอ → mix-blend-mode ของลูกจะถูก isolate
+       ไม่ทะลุไปผสมกับพื้นหลังหน้า ทำให้กรอบดำสี่เหลี่ยมของไฟล์ PNG โผล่ให้เห็น
+       จึงต้อง blend ที่ตัว group นี้แทน ลูก ๆ ยัง blend กันเองภายใน group ได้ตามปกติ */
     .menu-fx{--stack:min(86vw,60vh,520px);
       position:fixed;top:22%;left:50%;transform:translate(-50%,-50%);
       width:var(--stack);height:var(--stack);
-      z-index:0;pointer-events:none;opacity:.70}
+      z-index:0;pointer-events:none;opacity:.70;mix-blend-mode:screen}
     .pi-aura{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
       width:calc(var(--stack)*.85);height:calc(var(--stack)*.85);
       z-index:0;pointer-events:none;mix-blend-mode:screen;
