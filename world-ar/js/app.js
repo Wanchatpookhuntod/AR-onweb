@@ -31,6 +31,22 @@ const RADIUS_M = 300;   // รัศมีของสถานที่ — อ
 const ROAM_CYCLE_SECS = 9;  // ปลดล็อคครบ 7 → หมุนเวียน VFX ของทั้ง 7 ทุก ~9 วิ (roaming reward)
 const REVEAL_DELAY_MS = 10000;  // หลังปลดล็อคสถานที่สุดท้าย → รอ 10 วิ ก่อนขึ้นป้ายฉลอง
 const REVEAL_POPUP_MS = 7000;   // ป้ายฉลองแสดง ~7 วิ แล้วสถานะ unlock (effect ตลอด) จึงเริ่ม
+// ข้อความตั้งต้นของแถบล่าง — ใช้คืนค่าเมื่อไม่ได้เล็ง/อยู่ใกล้สปอตใด (ตรงกับที่เขียนไว้ใน index.html)
+const IDLE_NAME = 'กำลังหาตำแหน่ง...', IDLE_DESC = 'หันกล้องไปหา spot เพื่อดู VFX';
+
+// ═══ GPS HEADING FUSION ═══
+// pos.coords.heading = ทิศ "การเคลื่อนที่" (course over ground) อ้างอิงทิศเหนือจริง
+// ข้อดี: ไม่โดนเหล็ก/สนามแม่เหล็กรบกวนแบบ magnetometer — ซึ่งเป็น error ตัวหลักของแอปนี้
+// ข้อจำกัด: เป็นทิศที่ "เดินไป" ไม่ใช่ทิศที่ "กล้องหัน" จึงใช้แทน rawH ตรง ๆ ไม่ได้
+// วิธีใช้: ระหว่างเดินตรงและถือกล้องนิ่ง ผลต่าง (gpsHeading − baseH) ควรคงที่
+//          ค่าคงที่นั้นคือ bias ของเข็มทิศ (ดูดซับ magnetic declination ไปด้วยในตัว)
+// ทุกเกณฑ์ตั้งไว้เข้ม เพราะแก้ผิดทางแย่กว่าไม่แก้เลย
+const FUSE_MIN_SPEED = 0.8;      // m/s — ช้ากว่านี้ course over ground ไม่น่าเชื่อถือ
+const FUSE_MAX_GPS_ERR = 20;     // m — fix แย่กว่านี้ไม่เก็บ
+const FUSE_MAX_TURN = 0.8;       // °/เฟรม — กำลังกวัดกล้องอยู่ ไม่ใช่ถือนิ่ง
+const FUSE_MIN_SAMPLES = 12;     // ต้องสะสมอย่างน้อยเท่านี้ก่อนเชื่อ
+const FUSE_MIN_AGREE = 0.90;     // circular resultant ของ residual — ต่ำกว่านี้แปลว่าถือกล้องส่ายไปมา
+const FUSE_MAX_CORRECTION = 60;  // ° — เกินนี้น่าจะถือกล้องหันคนละทางกับที่เดิน ไม่ใช่ bias
 
 // โหลดสถานที่จากไฟล์ JSON แล้ว map เป็นรูปแบบที่แอปใช้
 const spotsReady = fetch('assets/src/location.json')
@@ -59,6 +75,12 @@ let revealPopupShown = localStorage.getItem('revealPopupShown') === '1';
 let ps = [], ss = [], sparks = [];   // sparks = สะเก็ดไฟ (ใช้เฉพาะ vfxShrine)
 let auraStars = [];                   // ดาวประกายของเลเยอร์แสงศักดิ์สิทธิ์ (grandAura)
 let headingOffset = parseInt(localStorage.getItem('headingOffset') || '0', 10);
+// ทิศดิบจากเซนเซอร์ ก่อนบวก offset ใด ๆ — ใช้ประมาณ bias เพื่อไม่ให้เกิด feedback loop
+let baseH = 0;
+let gpsHeading = null, gpsSpeed = 0, gpsAcc = Infinity;
+let fuseBuf = [], fuseConfidence = 0;
+let autoOffset = parseInt(localStorage.getItem('autoOffset') || '0', 10) || 0;
+let autoOffsetOn = localStorage.getItem('autoOffsetOn') !== '0';   // เปิดโดยค่าเริ่มต้น
 let hBuf = [], compassAccuracy = 1;
 let hwAccuracy = -1;              // iOS ฮาร์ดแวร์: 0-1 (-1 = ไม่รู้)
 let prevRawH = null, turnRate = 0; // ความเร็วหมุน — แยก motion ออกจาก noise
@@ -244,6 +266,11 @@ function startGPS() {
   if (!navigator.geolocation) { setDemo(); return; }
   navigator.geolocation.watchPosition(pos => {
     userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+    // ฟิลด์เสริมที่เบราว์เซอร์ให้มาฟรี — heading/speed เป็น null ตอนอยู่นิ่งหรืออุปกรณ์ไม่รองรับ
+    gpsAcc = Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : Infinity;
+    gpsSpeed = Number.isFinite(pos.coords.speed) ? pos.coords.speed : 0;
+    gpsHeading = Number.isFinite(pos.coords.heading) ? pos.coords.heading : null;
+    collectFuseSample();          // เก็บที่จังหวะ GPS อัปเดต (ไม่กี่ Hz) ไม่ใช่ทุกเฟรม
     const dot = document.getElementById('gps-dot');
     if (dot) { dot.style.animation = 'none'; dot.style.background = '#4CAF50'; dot.style.boxShadow = '0 0 5px #4CAF50'; }
     const txt = document.getElementById('gps-txt');
@@ -266,6 +293,67 @@ function readScreenAngle() {
     ? screen.orientation.angle
     : (window.orientation || 0);
 }
+
+// ทิศที่ใช้จริง = ทิศดิบ + offset ที่ผู้ใช้ตั้งเอง + offset ที่ประมาณได้จาก GPS
+function applyOffsets(h) {
+  return (h + headingOffset + (autoOffsetOn ? autoOffset : 0) + 720) % 360;
+}
+
+// เก็บ residual ระหว่างเข็มทิศกับทิศเดินจาก GPS แล้วประมาณ bias ของ magnetometer
+function collectFuseSample() {
+  if (!autoOffsetOn) return;
+  // ต้องผ่านเกณฑ์คัดกรองครบทุกข้อถึงนับเป็นตัวอย่างที่เชื่อได้
+  if (gpsHeading === null) return;               // อยู่นิ่ง หรืออุปกรณ์ไม่ให้ค่า
+  if (gpsSpeed < FUSE_MIN_SPEED) return;         // ยังไม่ได้เดินจริง
+  if (gpsAcc > FUSE_MAX_GPS_ERR) return;         // fix แย่เกินเชื่อ
+  if (turnRate > FUSE_MAX_TURN) return;          // กำลังกวัดกล้องหาสปอต ไม่ได้ถือนิ่ง
+
+  fuseBuf.push(adiff(baseH, gpsHeading));        // = ค่าที่ต้องบวกให้ baseH ไปตรงกับ GPS
+  if (fuseBuf.length > 30) fuseBuf.shift();
+  if (fuseBuf.length < FUSE_MIN_SAMPLES) return;
+
+  // circular mean + resultant length — residual ต้องเกาะกลุ่มจริงถึงจะถือว่าเป็น bias
+  const sx = fuseBuf.reduce((s, d) => s + Math.sin(d * Math.PI / 180), 0);
+  const cx = fuseBuf.reduce((s, d) => s + Math.cos(d * Math.PI / 180), 0);
+  fuseConfidence = Math.hypot(sx, cx) / fuseBuf.length;
+  if (fuseConfidence < FUSE_MIN_AGREE) return;   // กระจัดกระจาย = ถือกล้องส่าย ไม่ใช่ bias
+
+  const mean = Math.atan2(sx, cx) * 180 / Math.PI;
+  if (Math.abs(mean) > FUSE_MAX_CORRECTION) return;  // น่าจะส่องกล้องคนละทางกับที่เดิน
+
+  autoOffset = Math.round(mean);
+  try { localStorage.setItem('autoOffset', autoOffset); } catch (e) {}
+}
+
+function toggleAutoOffset() {
+  autoOffsetOn = !autoOffsetOn;
+  fuseBuf = []; fuseConfidence = 0;               // เริ่มสะสมใหม่เสมอเมื่อสลับโหมด
+  try { localStorage.setItem('autoOffsetOn', autoOffsetOn ? '1' : '0'); } catch (e) {}
+  updateAutoRow();
+}
+
+// แสดงสถานะการปรับอัตโนมัติใน cal panel — ผู้ใช้ต้องเห็นว่าระบบแก้ทิศให้เท่าไร
+function updateAutoRow() {
+  const val = document.getElementById('cal-auto-val');
+  const btn = document.getElementById('cal-auto-btn');
+  if (btn) {
+    btn.textContent = autoOffsetOn ? 'ปิด' : 'เปิด';
+    btn.classList.toggle('off', !autoOffsetOn);
+  }
+  if (!val) return;
+  if (!autoOffsetOn) { val.textContent = 'ปิดอยู่'; val.className = 'auto-idle'; return; }
+  if (fuseBuf.length < FUSE_MIN_SAMPLES) {
+    val.textContent = `กำลังเรียนรู้ ${fuseBuf.length}/${FUSE_MIN_SAMPLES} — เดินตรงสักครู่`;
+    val.className = 'auto-idle';
+  } else if (fuseConfidence < FUSE_MIN_AGREE) {
+    val.textContent = 'ค่ายังไม่นิ่ง — ถือกล้องไปทางที่เดิน';
+    val.className = 'auto-idle';
+  } else {
+    val.textContent = `${fmtOffset(autoOffset)} (มั่นใจ ${Math.round(fuseConfidence * 100)}%)`;
+    val.className = 'auto-ok';
+  }
+}
+
 function startCompass() {
   readScreenAngle();
   addEventListener('orientationchange', readScreenAngle);
@@ -273,7 +361,8 @@ function startCompass() {
   const handleIOS = e => {
     if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
       // webkitCompassHeading = ทิศจริงที่ขอบบนเครื่องชี้ (CW) — ชดเชยการหมุนจอ
-      rawH = (e.webkitCompassHeading + screenAngle + headingOffset + 720) % 360;
+      baseH = (e.webkitCompassHeading + screenAngle + 720) % 360;
+      rawH = applyOffsets(baseH);
       // เก็บความแม่นยำฮาร์ดแวร์แยกไว้ ไม่ให้ถูก variance เขียนทับ
       hwAccuracy = e.webkitCompassAccuracy >= 0
         ? Math.max(0, 1 - e.webkitCompassAccuracy / 45)
@@ -281,8 +370,10 @@ function startCompass() {
     }
   };
   const handleAbsolute = e => {
-    if (e.alpha !== null)
-      rawH = ((360 - e.alpha) + screenAngle + headingOffset + 720) % 360;
+    if (e.alpha !== null) {
+      baseH = ((360 - e.alpha) + screenAngle + 720) % 360;
+      rawH = applyOffsets(baseH);
+    }
   };
 
   if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
@@ -362,6 +453,7 @@ function updateAccuracy() {
     }
   }
   if (phone) phone.classList.toggle('stable', compassAccuracy > 0.85 && !compassUnreliable);
+  updateAutoRow();
 }
 
 // ═══ CALIBRATION ═══
@@ -369,6 +461,7 @@ function openCal() {
   const panel = document.getElementById('cal-panel');
   panel.style.display = 'flex';
   document.getElementById('cal-offset-val').textContent = fmtOffset(headingOffset);
+  updateAutoRow();
 }
 function closeCal() {
   document.getElementById('cal-panel').style.display = 'none';
@@ -384,6 +477,10 @@ function resetOffset() {
   headingOffset = 0;
   localStorage.setItem('headingOffset', 0);
   document.getElementById('cal-offset-val').textContent = '0°';
+  // ล้างค่าที่ประมาณอัตโนมัติด้วย ไม่งั้นกดรีเซ็ตแล้วทิศยังไม่กลับไปค่าดิบ
+  autoOffset = 0; fuseBuf = []; fuseConfidence = 0;
+  try { localStorage.setItem('autoOffset', 0); } catch (e) {}
+  updateAutoRow();
 }
 function fmtOffset(v) { return `${v > 0 ? '+' : ''}${v}°`; }
 
@@ -683,7 +780,13 @@ function checkAim() {
   } else {
     aimedSpot = null;
     vfxFade = Math.max(0, vfxFade - .025);
-    if (vfxFade === 0) { activeVFX = null; document.getElementById('vfx-tag').textContent = '◌ SEARCHING...'; }
+    if (vfxFade === 0) {
+      activeVFX = null;
+      document.getElementById('vfx-tag').textContent = '◌ SEARCHING...';
+      // คืนข้อความตั้งต้น — ไม่งั้นชื่อ/คำบรรยายของสปอตล่าสุดค้างอยู่ตลอด
+      document.getElementById('b-name').textContent = IDLE_NAME;
+      document.getElementById('b-desc').textContent = IDLE_DESC;
+    }
   }
   document.querySelectorAll('.chip').forEach(c => {
     const id = c.dataset.id;

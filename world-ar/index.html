@@ -197,6 +197,15 @@
   </div>
   <div class="cal-hint" style="font-size:10px;opacity:.45">ปรับ offset ถ้าทิศยังเพี้ยนหลัง calibrate</div>
 
+  <div class="cal-auto-row">
+    <div class="cal-auto-head">
+      <span class="cal-hdg-label">ปรับอัตโนมัติจาก GPS</span>
+      <button class="cal-auto-btn" id="cal-auto-btn" onclick="toggleAutoOffset()">ปิด</button>
+    </div>
+    <div id="cal-auto-val" class="auto-idle">ปิดอยู่</div>
+    <div class="cal-hint" style="font-size:10px;opacity:.45">เดินตรงสัก 10–20 ก้าว โดยหันกล้องไปทางที่เดิน ระบบจะหา bias ของเข็มทิศเอง</div>
+  </div>
+
   <div style="display:flex;gap:12px;margin-top:4px">
     <button class="cal-reset" onclick="resetOffset()">รีเซ็ต</button>
     <button class="cal-done" onclick="closeCal()">เสร็จแล้ว ✓</button>

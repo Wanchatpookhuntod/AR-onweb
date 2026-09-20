@@ -456,6 +456,19 @@ button:focus-visible{outline:2px solid rgba(240,208,128,.85);outline-offset:2px}
   padding:12px 36px;border-radius:30px;font-size:14px;letter-spacing:.1em;
   cursor:pointer;font-weight:700;box-shadow:0 0 20px rgba(201,168,76,.35)}
 
+/* ปรับทิศอัตโนมัติจาก GPS heading */
+.cal-auto-row{display:flex;flex-direction:column;gap:6px;width:100%;max-width:280px;
+  background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.15);
+  border-radius:12px;padding:10px 16px}
+.cal-auto-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cal-auto-btn{background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);
+  color:#F0D080;font-size:11px;letter-spacing:.08em;
+  padding:4px 14px;border-radius:14px;cursor:pointer}
+.cal-auto-btn.off{color:rgba(201,168,76,.35);border-color:rgba(201,168,76,.15)}
+#cal-auto-val{font-size:11px;letter-spacing:.03em;line-height:1.4}
+#cal-auto-val.auto-idle{color:rgba(201,168,76,.45)}
+#cal-auto-val.auto-ok{color:#7CCF80}
+
 /* CAL INTRO SCREEN */
 #cal-intro{position:fixed;inset:0;z-index:51;
   background:
